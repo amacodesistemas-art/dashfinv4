@@ -4,8 +4,147 @@
 
 const DataService = {
   
+  // Sistema de Planos integrado
+  PLANS: {
+    BASIC: 'basic',
+    INTERMEDIATE: 'intermediate',
+    ADVANCED: 'advanced'
+  },
+  
+  PLAN_FEATURES: {
+    'basic': {
+      name: 'Básico',
+      price: 'R$ 97/mês',
+      features: {
+        dashboard: true,
+        filters: true,
+        export_csv: true,
+        export_pdf: true,
+        charts: true,
+        goals: true,
+        accounts: true,
+        insights_basic: true,
+        dre: false,
+        ai_classification: false,
+        ai_insights: false,
+        predictive_analytics: false
+      }
+    },
+    'intermediate': {
+      name: 'Intermediário',
+      price: 'R$ 197/mês',
+      features: {
+        dashboard: true,
+        filters: true,
+        export_csv: true,
+        export_pdf: true,
+        charts: true,
+        goals: true,
+        accounts: true,
+        insights_basic: true,
+        dre: true,
+        ai_classification: false,
+        ai_insights: false,
+        predictive_analytics: false
+      }
+    },
+    'advanced': {
+      name: 'Avançado',
+      price: 'R$ 397/mês',
+      features: {
+        dashboard: true,
+        filters: true,
+        export_csv: true,
+        export_pdf: true,
+        charts: true,
+        goals: true,
+        accounts: true,
+        insights_basic: true,
+        dre: true,
+        ai_classification: true,
+        ai_insights: true,
+        predictive_analytics: true,
+        priority_support: true,
+        custom_reports: true
+      }
+    }
+  },
+  
+  // Obtém plano do cliente
+  getClientPlan: function(ss) {
+    try {
+      const configSheet = ss.getSheetByName('CONFIG');
+      
+      if (!configSheet) {
+        Logger.log('[Plans] Aba CONFIG não encontrada, usando plano BASIC');
+        return this.PLANS.BASIC;
+      }
+      
+      // Lê todas as linhas da CONFIG
+      const lastRow = configSheet.getLastRow();
+      if (lastRow < 1) {
+        Logger.log('[Plans] CONFIG vazia, usando plano BASIC');
+        return this.PLANS.BASIC;
+      }
+      
+      const data = configSheet.getRange(1, 1, lastRow, 2).getValues();
+      
+      // Procura pela linha com "plano"
+      for (let i = 0; i < data.length; i++) {
+        const key = String(data[i][0]).toLowerCase().trim();
+        const value = String(data[i][1]).toLowerCase().trim();
+        
+        Logger.log('[Plans] Linha ' + (i+1) + ': key="' + key + '", value="' + value + '"');
+        
+        if (key.includes('plano') || key.includes('plan')) {
+          Logger.log('[Plans] Encontrou linha de plano: ' + value);
+          
+          // Mapeia para plano válido
+          if (value.includes('avançado') || value.includes('avancado') || value.includes('advanced')) {
+            Logger.log('[Plans] Detectado: ADVANCED');
+            return this.PLANS.ADVANCED;
+          } else if (value.includes('intermediário') || value.includes('intermediario') || value.includes('intermediate')) {
+            Logger.log('[Plans] Detectado: INTERMEDIATE');
+            return this.PLANS.INTERMEDIATE;
+          } else if (value.includes('básico') || value.includes('basico') || value.includes('basic')) {
+            Logger.log('[Plans] Detectado: BASIC');
+            return this.PLANS.BASIC;
+          }
+        }
+      }
+      
+      Logger.log('[Plans] Plano não encontrado na CONFIG, usando BASIC');
+      return this.PLANS.BASIC;
+      
+    } catch (error) {
+      Logger.log('[Plans] Erro ao obter plano: ' + error.message);
+      return this.PLANS.BASIC;
+    }
+  },
+  
+  // Obtém info do plano
+  getPlanInfo: function(planKey) {
+    const planConfig = this.PLAN_FEATURES[planKey];
+    
+    if (!planConfig) {
+      Logger.log('[Plans] Plano não encontrado: ' + planKey + ', usando BASIC');
+      planKey = this.PLANS.BASIC;
+    }
+    
+    return {
+      plan: planKey,
+      name: this.PLAN_FEATURES[planKey].name,
+      price: this.PLAN_FEATURES[planKey].price,
+      features: this.PLAN_FEATURES[planKey].features
+    };
+  },
+  
   fetchAllData: function() {
     const ss = SpreadsheetApp.openById(getSpreadsheetId());
+    
+    // Obtém plano do cliente
+    const clientPlan = this.getClientPlan(ss);
+    Logger.log('[DataService] Plano do cliente: ' + clientPlan);
     
     const config = this.readConfig(ss);
     const accounts = this.readAccounts(ss);
@@ -14,7 +153,8 @@ const DataService = {
     const goals = this.readGoals(ss);
     
     // Obtem informações do plano
-    const planInfo = getPlanInfo();
+    const planInfo = this.getPlanInfo(clientPlan);
+    Logger.log('[DataService] Plan Info: ' + JSON.stringify(planInfo));
     
     // Validação de dados
     const validation = this.validateData({
@@ -30,7 +170,7 @@ const DataService = {
       goals: goals,
       lastUpdate: new Date().toISOString(),
       validation: validation,
-      plan: planInfo // Adiciona informações do plano
+      plan: planInfo
     };
   },
   
