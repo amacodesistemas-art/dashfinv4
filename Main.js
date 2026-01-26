@@ -82,17 +82,35 @@ function askAIFinancialQuestion(question, contextData) {
     
     // Filtra transacoes pelo periodo atual
     var period = contextData.period || {};
-    var startDate = period.start ? new Date(period.start) : null;
-    var endDate = period.end ? new Date(period.end) : null;
+    var startDate = null;
+    var endDate = null;
+    
+    if (period.start) {
+      startDate = new Date(period.start);
+      startDate.setHours(0, 0, 0, 0);
+    }
+    
+    if (period.end) {
+      endDate = new Date(period.end);
+      endDate.setHours(23, 59, 59, 999);
+    }
     
     var allTransactions = contextData.transactions || [];
     var filteredTransactions = allTransactions;
     
+    Logger.log('[AI Chat] Periodo recebido: ' + period.start + ' ate ' + period.end + ' (mode: ' + period.mode + ')');
+    Logger.log('[AI Chat] Total transacoes recebidas: ' + allTransactions.length);
+    
     if (startDate && endDate) {
       filteredTransactions = allTransactions.filter(function(t) {
-        var tDate = new Date(t.date);
+        if (!t.date) return false;
+        var parts = t.date.split('-');
+        var tDate = new Date(parts[0], parts[1] - 1, parts[2]);
+        tDate.setHours(12, 0, 0, 0);
         return tDate >= startDate && tDate <= endDate;
       });
+      
+      Logger.log('[AI Chat] Transacoes filtradas para o periodo: ' + filteredTransactions.length);
     }
     
     // Calcula periodo anterior para comparacao
