@@ -54,12 +54,22 @@ function include(filename) {
 }
 
 function testData() {
-  const data = DataService.fetchAllData();
   Logger.log('=== TESTE DE DADOS ===');
+  
+  const data = DataService.fetchAllData();
+  
   Logger.log('Config: ' + JSON.stringify(data.config));
   Logger.log('Contas: ' + data.accounts.length);
   Logger.log('Transações: ' + data.transactions.length);
   Logger.log('Metas: ' + data.goals.length);
+  
+  // Teste de Plano
+  Logger.log('\n=== INFORMAÇÕES DO PLANO ===');
+  Logger.log('Plano: ' + data.plan.plan);
+  Logger.log('Nome: ' + data.plan.name);
+  Logger.log('Preço: ' + data.plan.price);
+  Logger.log('DRE disponível? ' + data.plan.features.dre);
+  Logger.log('IA disponível? ' + data.plan.features.ai_classification);
   
   if (data.validation) {
     Logger.log('\n=== VALIDAÇÃO ===');
@@ -83,4 +93,25 @@ function testData() {
   }
   
   Logger.log('\n=== FIM DOS TESTES ===');
+}
+
+// Função específica para testar planos
+function testPlans() {
+  Logger.log('=== TESTE DE PLANOS ===');
+  
+  const ss = SpreadsheetApp.openById(getSpreadsheetId());
+  const plan = DataService.getClientPlan(ss);
+  const planInfo = DataService.getPlanInfo(plan);
+  
+  Logger.log('Plano detectado: ' + plan);
+  Logger.log('Nome do plano: ' + planInfo.name);
+  Logger.log('Preço: ' + planInfo.price);
+  
+  Logger.log('\nFeatures Disponíveis:');
+  Object.keys(planInfo.features).forEach(function(feature) {
+    const available = planInfo.features[feature];
+    Logger.log('  ' + (available ? '✓' : '✗') + ' ' + feature);
+  });
+  
+  Logger.log('\n=== FIM DO TESTE ===');
 }
