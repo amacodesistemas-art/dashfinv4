@@ -53,39 +53,169 @@ function include(filename) {
   return HtmlService.createHtmlOutputFromFile(filename).getContent();
 }
 
-// Fun\u00e7\u00e3o para processar perguntas do chatbot de IA
+// Função para processar perguntas do chatbot de IA
 function askAIFinancialQuestion(question, dashboardData) {
   try {
     // Verifica se tem API key configurada
-    const ss = SpreadsheetApp.openById(getSpreadsheetId());
-    const configSheet = ss.getSheetByName('CONFIG');
+    var ss = SpreadsheetApp.openById(getSpreadsheetId());
+    var configSheet = ss.getSheetByName('CONFIG');
     
     if (!configSheet) {
-      return 'Desculpe, n\u00e3o consegui acessar as configura\u00e7\u00f5es.';
+      return 'Desculpe, nao consegui acessar as configuracoes.';
     }
     
     // Busca API key
-    const data = configSheet.getRange('A:B').getValues();
-    let apiKey = null;
+    var data = configSheet.getRange('A:B').getValues();
+    var apiKey = null;
     
-    for (let i = 0; i < data.length; i++) {
-      const key = String(data[i][0]).toLowerCase().trim();
-      if (key.includes('ai_api_key') || key.includes('api_key')) {
+    for (var i = 0; i < data.length; i++) {
+      var key = String(data[i][0]).toLowerCase().trim();
+      if (key.indexOf('ai_api_key') > -1 || key.indexOf('api_key') > -1) {
         apiKey = data[i][1];
         break;
       }
     }
     
     if (!apiKey) {
-      return 'Recurso de IA n\u00e3o configurado. Entre em contato com seu consultor para ativar.';
+      return 'Recurso de IA nao configurado. Entre em contato com seu consultor para ativar.';
     }
     
     // Prepara contexto financeiro
-    const stats = calculateStats(dashboardData);
-    const context = prepareFinancialContext(dashboardData, stats);
+    var stats = calculateStats(dashboardData);
+    var context = prepareFinancialContext(dashboardData, stats);
     
     // Monta prompt para IA
-    const prompt = `Voc\u00ea \u00e9 um assistente financeiro especializado e amig\u00e1vel.\n\nContexto Financeiro do Cliente:\n${context}\n\nPergunta do Cliente: ${question}\n\nResponda de forma:\n- Clara e objetiva\n- Usando dados reais do contexto\n- Dando recomenda\u00e7\u00f5es pr\u00e1ticas\n- Tom conversacional e acess\u00edvel\n- M\u00e1ximo 150 palavras\n\nResposta:`;\n    \n    // Chama OpenAI\n    const response = callOpenAI(apiKey, prompt, 300);\n    return response;\n    \n  } catch (error) {\n    Logger.log('[AI Chat] Erro: ' + error.message);\n    return 'Desculpe, tive um problema ao processar sua pergunta. Erro: ' + error.message;\n  }\n}\n\n// Prepara contexto financeiro\nfunction prepareFinancialContext(data, stats) {\n  const transactions = data.transactions || [];\n  \n  // Top 5 categorias de gasto\n  const gastos = {};\n  transactions.filter(t => t.type === 'Sa\u00edda').forEach(t => {\n    gastos[t.category] = (gastos[t.category] || 0) + t.value;\n  });\n  \n  const topGastos = Object.entries(gastos)\n    .sort((a, b) => b[1] - a[1])\n    .slice(0, 5)\n    .map(([cat, val]) => `${cat}: R$ ${val.toFixed(2)}`);\n  \n  // Transa\u00e7\u00f5es pendentes\n  const pendentes = transactions.filter(t => {\n    const status = (t.status || '').toLowerCase();\n    return !status.includes('pago') && !status.includes('conclu\u00eddo');\n  });\n  \n  const context = `\nPer\u00edodo: \u00daltimos 30 dias\nReceitas: R$ ${stats.entradas.toFixed(2)}\nDespesas: R$ ${stats.saidas.toFixed(2)}\nSaldo: R$ ${stats.saldo.toFixed(2)}\nScore de Sa\u00fade: ${stats.healthScore}/100\n\nTop 5 Categorias de Gasto:\n${topGastos.join('\\n')}\n\nTotal de Transa\u00e7\u00f5es: ${transactions.length}\nPendentes: ${pendentes.length} (R$ ${pendentes.reduce((s, t) => s + t.value, 0).toFixed(2)})\n`;\n  \n  return context;\n}\n\n// Calcula estat\u00edsticas\nfunction calculateStats(data) {\n  const transactions = data.transactions || [];\n  const accounts = data.accounts || [];\n  \n  let entradas = 0;\n  let saidas = 0;\n  \n  transactions.forEach(t => {\n    if (t.type === 'Entrada') {\n      entradas += t.value;\n    } else {\n      saidas += t.value;\n    }\n  });\n  \n  const saldo = entradas - saidas;\n  const totalPatrimonio = accounts.reduce((s, a) => s + a.balance, 0);\n  \n  // Calcula score de sa\u00fade\n  let healthScore = 0;\n  if (saldo > 0) healthScore += 40;\n  if (entradas > 0 && (saldo / entradas) >= 0.2) healthScore += 30;\n  if (totalPatrimonio > 0) healthScore += 30;\n  \n  return {\n    entradas: entradas,\n    saidas: saidas,\n    saldo: saldo,\n    healthScore: healthScore\n  };\n}\n\n// Chama OpenAI API\nfunction callOpenAI(apiKey, prompt, maxTokens) {\n  const url = 'https://api.openai.com/v1/chat/completions';\n  \n  const payload = {\n    model: 'gpt-4',\n    messages: [\n      {\n        role: 'system',\n        content: 'Voc\u00ea \u00e9 um assistente financeiro brasileiro especializado, sempre respondendo em portugu\u00eas do Brasil de forma clara e pr\u00e1tica.'\n      },\n      {\n        role: 'user',\n        content: prompt\n      }\n    ],\n    max_tokens: maxTokens,\n    temperature: 0.7\n  };\n  \n  const options = {\n    method: 'post',\n    contentType: 'application/json',\n    headers: {\n      'Authorization': 'Bearer ' + apiKey\n    },\n    payload: JSON.stringify(payload),\n    muteHttpExceptions: true\n  };\n  \n  const response = UrlFetchApp.fetch(url, options);\n  const json = JSON.parse(response.getContentText());\n  \n  if (json.error) {\n    throw new Error('OpenAI Error: ' + json.error.message);\n  }\n  \n  return json.choices[0].message.content.trim();\n}\n\nfunction testData() {
+    var prompt = 'Voce e um assistente financeiro especializado e amigavel.\n\n';
+    prompt += 'Contexto Financeiro do Cliente:\n' + context + '\n\n';
+    prompt += 'Pergunta do Cliente: ' + question + '\n\n';
+    prompt += 'Responda de forma:\n';
+    prompt += '- Clara e objetiva\n';
+    prompt += '- Usando dados reais do contexto\n';
+    prompt += '- Dando recomendacoes praticas\n';
+    prompt += '- Tom conversacional e acessivel\n';
+    prompt += '- Maximo 150 palavras\n\n';
+    prompt += 'Resposta:';
+    
+    // Chama OpenAI
+    var response = callOpenAI(apiKey, prompt, 300);
+    return response;
+    
+  } catch (error) {
+    Logger.log('[AI Chat] Erro: ' + error.message);
+    return 'Desculpe, tive um problema ao processar sua pergunta. Erro: ' + error.message;
+  }
+}
+
+// Prepara contexto financeiro
+function prepareFinancialContext(data, stats) {
+  var transactions = data.transactions || [];
+  
+  // Top 5 categorias de gasto
+  var gastos = {};
+  transactions.filter(function(t) { return t.type === 'Saida'; }).forEach(function(t) {
+    gastos[t.category] = (gastos[t.category] || 0) + t.value;
+  });
+  
+  var topGastos = Object.keys(gastos)
+    .map(function(key) { return [key, gastos[key]]; })
+    .sort(function(a, b) { return b[1] - a[1]; })
+    .slice(0, 5)
+    .map(function(item) { return item[0] + ': R$ ' + item[1].toFixed(2); });
+  
+  // Transacoes pendentes
+  var pendentes = transactions.filter(function(t) {
+    var status = (t.status || '').toLowerCase();
+    return status.indexOf('pago') === -1 && status.indexOf('concluido') === -1;
+  });
+  
+  var pendenteTotal = pendentes.reduce(function(s, t) { return s + t.value; }, 0);
+  
+  var context = '\nPeriodo: Ultimos 30 dias\n';
+  context += 'Receitas: R$ ' + stats.entradas.toFixed(2) + '\n';
+  context += 'Despesas: R$ ' + stats.saidas.toFixed(2) + '\n';
+  context += 'Saldo: R$ ' + stats.saldo.toFixed(2) + '\n';
+  context += 'Score de Saude: ' + stats.healthScore + '/100\n\n';
+  context += 'Top 5 Categorias de Gasto:\n' + topGastos.join('\n') + '\n\n';
+  context += 'Total de Transacoes: ' + transactions.length + '\n';
+  context += 'Pendentes: ' + pendentes.length + ' (R$ ' + pendenteTotal.toFixed(2) + ')\n';
+  
+  return context;
+}
+
+// Calcula estatisticas
+function calculateStats(data) {
+  var transactions = data.transactions || [];
+  var accounts = data.accounts || [];
+  
+  var entradas = 0;
+  var saidas = 0;
+  
+  transactions.forEach(function(t) {
+    if (t.type === 'Entrada') {
+      entradas += t.value;
+    } else {
+      saidas += t.value;
+    }
+  });
+  
+  var saldo = entradas - saidas;
+  var totalPatrimonio = accounts.reduce(function(s, a) { return s + a.balance; }, 0);
+  
+  // Calcula score de saude
+  var healthScore = 0;
+  if (saldo > 0) healthScore += 40;
+  if (entradas > 0 && (saldo / entradas) >= 0.2) healthScore += 30;
+  if (totalPatrimonio > 0) healthScore += 30;
+  
+  return {
+    entradas: entradas,
+    saidas: saidas,
+    saldo: saldo,
+    healthScore: healthScore
+  };
+}
+
+// Chama OpenAI API
+function callOpenAI(apiKey, prompt, maxTokens) {
+  var url = 'https://api.openai.com/v1/chat/completions';
+  
+  var payload = {
+    model: 'gpt-4',
+    messages: [
+      {
+        role: 'system',
+        content: 'Voce e um assistente financeiro brasileiro especializado, sempre respondendo em portugues do Brasil de forma clara e pratica.'
+      },
+      {
+        role: 'user',
+        content: prompt
+      }
+    ],
+    max_tokens: maxTokens,
+    temperature: 0.7
+  };
+  
+  var options = {
+    method: 'post',
+    contentType: 'application/json',
+    headers: {
+      'Authorization': 'Bearer ' + apiKey
+    },
+    payload: JSON.stringify(payload),
+    muteHttpExceptions: true
+  };
+  
+  var response = UrlFetchApp.fetch(url, options);
+  var json = JSON.parse(response.getContentText());
+  
+  if (json.error) {
+    throw new Error('OpenAI Error: ' + json.error.message);
+  }
+  
+  return json.choices[0].message.content.trim();
+}
+
+function testData() {
   Logger.log('=== TESTE DE DADOS ===');
   
   const data = DataService.fetchAllData();
