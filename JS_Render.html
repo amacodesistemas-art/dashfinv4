@@ -395,13 +395,15 @@ function renderCashFlowDashboard(currentStats, lastStats, currentTxs, health, in
     // Estado vazio
     const emptyStateHTML = `
         <tr>
-            <td colspan="6" class="p-12 text-center">
-                <div class="flex flex-col items-center justify-center text-slate-300 dark:text-slate-600">
-                    <i data-lucide="search-x" class="w-16 h-16 mb-4 opacity-50"></i>
-                    <p class="text-lg font-medium text-slate-500 dark:text-slate-400">Nenhum lançamento encontrado</p>
-                    <p class="text-sm">Tente ajustar os filtros ou o período.</p>
-                    <button onclick="clearAllFilters()" class="mt-4 text-blue-600 hover:underline text-sm font-medium">Limpar filtros</button>
-                </div>
+            <td colspan="6" class="p-0">
+                ${UIComponents.emptyState({
+                    icon: 'search-x',
+                    title: 'Nenhum lançamento encontrado',
+                    description: 'Não encontramos transações com os filtros aplicados. Tente ajustar o período ou limpar os filtros.',
+                    iconColor: 'text-slate-300 dark:text-slate-600',
+                    actionText: 'Limpar Filtros',
+                    actionCallback: 'clearAllFilters()'
+                })}
             </td>
         </tr>
     `;
