@@ -13,6 +13,9 @@ const DataService = {
     const transactions = this.readTransactions(ss, accounts, dreMapping);
     const goals = this.readGoals(ss);
     
+    // Obtem informações do plano
+    const planInfo = getPlanInfo();
+    
     // Validação de dados
     const validation = this.validateData({
       accounts: accounts,
@@ -26,7 +29,8 @@ const DataService = {
       transactions: transactions,
       goals: goals,
       lastUpdate: new Date().toISOString(),
-      validation: validation // Inclui relatório de validação
+      validation: validation,
+      plan: planInfo // Adiciona informações do plano
     };
   },
   
