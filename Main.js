@@ -147,16 +147,21 @@ function askAIFinancialQuestion(question, contextData) {
 
 // Calcula periodo anterior para comparacao
 function calculatePreviousPeriod(currentTransactions, allTransactions, startDate, endDate) {
-  if (!startDate || !endDate) return { entradas: 0, saidas: 0, saldo: 0 };
+  if (!startDate || !endDate) return { entradas: 0, saidas: 0, saldo: 0, count: 0 };
   
   var periodDays = Math.round((endDate - startDate) / (1000 * 60 * 60 * 24));
   var prevEndDate = new Date(startDate);
   prevEndDate.setDate(prevEndDate.getDate() - 1);
+  prevEndDate.setHours(23, 59, 59, 999);
   var prevStartDate = new Date(prevEndDate);
   prevStartDate.setDate(prevStartDate.getDate() - periodDays);
+  prevStartDate.setHours(0, 0, 0, 0);
   
   var prevTransactions = allTransactions.filter(function(t) {
-    var tDate = new Date(t.date);
+    if (!t.date) return false;
+    var parts = t.date.split('-');
+    var tDate = new Date(parts[0], parts[1] - 1, parts[2]);
+    tDate.setHours(12, 0, 0, 0);
     return tDate >= prevStartDate && tDate <= prevEndDate;
   });
   
