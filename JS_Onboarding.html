@@ -1,0 +1,231 @@
+<script>
+// ===================================
+// ONBOARDING TUTORIAL
+// ===================================
+
+const ONBOARDING_STEPS = [
+  {
+    title: '🎉 Bem-vindo ao Dashboard Financeiro!',
+    description: 'Este é seu painel gerencial B2B completo. Vamos fazer um tour rápido pelas funcionalidades principais.',
+    target: null,
+    position: 'center'
+  },
+  {
+    title: '📊 Visão Geral',
+    description: 'Aqui você encontra seus KPIs principais: entradas, saídas, saldo e score de saúde financeira. Use os filtros de período para analisar diferentes janelas de tempo.',
+    target: '.bg-gradient-to-r',
+    position: 'bottom'
+  },
+  {
+    title: '💰 Contas a Pagar e Receber',
+    description: 'Clique nos cards para filtrar rapidamente transações pendentes. O sistema destaca automaticamente valores em atraso.',
+    target: '.cursor-pointer',
+    position: 'bottom'
+  },
+  {
+    title: '🔍 Filtros Avançados',
+    description: 'Use a busca inteligente e filtros para encontrar exatamente o que procura. Você pode filtrar por categoria, tipo, status, centro de custo e muito mais.',
+    target: '#transactionSearch',
+    position: 'bottom'
+  },
+  {
+    title: '⌨️ Atalhos de Teclado',
+    description: '<strong>Ctrl+K</strong>: Buscar<br><strong>Ctrl+R</strong>: Atualizar dados<br><strong>D</strong>: Modo escuro<br><strong>P</strong>: Modo privacidade<br><strong>Setas</strong>: Navegar páginas',
+    target: null,
+    position: 'center'
+  },
+  {
+    title: '✨ Pronto para começar!',
+    description: 'Explore o dashboard e descubra todas as funcionalidades. Seus dados estão sincronizados com o Google Sheets e atualizados automaticamente.',
+    target: null,
+    position: 'center'
+  }
+];
+
+let currentOnboardingStep = 0;
+
+function shouldShowOnboarding() {
+  const hasSeenOnboarding = localStorage.getItem('hasSeenOnboarding');
+  const hasNoData = !GLOBAL_DATA || !GLOBAL_DATA.transactions || GLOBAL_DATA.transactions.length === 0;
+  
+  // Mostra onboarding se nunca viu E tem dados
+  return !hasSeenOnboarding && !hasNoData;
+}
+
+function startOnboarding() {
+  if (!shouldShowOnboarding()) return;
+  
+  currentOnboardingStep = 0;
+  showOnboardingStep();
+}
+
+function showOnboardingStep() {
+  const step = ONBOARDING_STEPS[currentOnboardingStep];
+  if (!step) {
+    endOnboarding();
+    return;
+  }
+  
+  // Remove overlay anterior se existir
+  const existingOverlay = document.getElementById('onboarding-overlay');
+  if (existingOverlay) existingOverlay.remove();
+  
+  // Cria overlay
+  const overlay = document.createElement('div');
+  overlay.id = 'onboarding-overlay';
+  overlay.className = 'fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-fadeIn';
+  
+  // Destaca elemento alvo se existir
+  let targetEl = null;
+  if (step.target) {
+    targetEl = document.querySelector(step.target);
+    if (targetEl) {
+      targetEl.classList.add('onboarding-highlight');
+      targetEl.style.position = 'relative';
+      targetEl.style.zIndex = '101';
+    }
+  }
+  
+  // Card do tutorial
+  const card = document.createElement('div');
+  card.className = 'bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-lg w-full p-8 relative animate-slideUp';
+  
+  card.innerHTML = `
+    <div class="absolute top-4 right-4">
+      <button onclick="skipOnboarding()" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors">
+        <i data-lucide="x" class="w-5 h-5"></i>
+      </button>
+    </div>
+    
+    <div class="text-center mb-6">
+      <h2 class="text-2xl font-bold text-slate-800 dark:text-white mb-2">${step.title}</h2>
+      <p class="text-slate-600 dark:text-slate-400 text-sm leading-relaxed">${step.description}</p>
+    </div>
+    
+    <div class="flex items-center justify-between">
+      <div class="flex items-center gap-2">
+        ${ONBOARDING_STEPS.map((_, i) => `
+          <div class="w-2 h-2 rounded-full transition-all ${
+            i === currentOnboardingStep ? 'bg-blue-600 w-6' : 
+            i < currentOnboardingStep ? 'bg-blue-400' : 'bg-slate-300'
+          }"></div>
+        `).join('')}
+      </div>
+      
+      <div class="flex items-center gap-3">
+        ${currentOnboardingStep > 0 ? `
+          <button onclick="previousOnboardingStep()" class="px-4 py-2 text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 font-medium transition-colors">
+            Voltar
+          </button>
+        ` : ''}
+        
+        <button onclick="nextOnboardingStep()" class="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg transition-all hover:scale-105 active:scale-95 shadow-lg">
+          ${currentOnboardingStep === ONBOARDING_STEPS.length - 1 ? 'Começar!' : 'Próximo'}
+        </button>
+      </div>
+    </div>
+    
+    ${currentOnboardingStep === 0 ? `
+      <div class="mt-6 pt-6 border-t border-slate-200 dark:border-slate-700">
+        <label class="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 cursor-pointer">
+          <input type="checkbox" id="dontShowAgain" class="rounded border-slate-300 text-blue-600 focus:ring-blue-500">
+          <span>Não mostrar novamente</span>
+        </label>
+      </div>
+    ` : ''}
+  `;
+  
+  overlay.appendChild(card);
+  document.body.appendChild(overlay);
+  
+  // Inicializa ícones
+  lucide.createIcons();
+}
+
+function nextOnboardingStep() {
+  // Remove destaque do elemento anterior
+  const highlighted = document.querySelector('.onboarding-highlight');
+  if (highlighted) {
+    highlighted.classList.remove('onboarding-highlight');
+    highlighted.style.position = '';
+    highlighted.style.zIndex = '';
+  }
+  
+  currentOnboardingStep++;
+  
+  if (currentOnboardingStep >= ONBOARDING_STEPS.length) {
+    endOnboarding();
+  } else {
+    showOnboardingStep();
+  }
+}
+
+function previousOnboardingStep() {
+  const highlighted = document.querySelector('.onboarding-highlight');
+  if (highlighted) {
+    highlighted.classList.remove('onboarding-highlight');
+    highlighted.style.position = '';
+    highlighted.style.zIndex = '';
+  }
+  
+  currentOnboardingStep--;
+  if (currentOnboardingStep < 0) currentOnboardingStep = 0;
+  showOnboardingStep();
+}
+
+function skipOnboarding() {
+  const checkbox = document.getElementById('dontShowAgain');
+  if (checkbox && checkbox.checked) {
+    localStorage.setItem('hasSeenOnboarding', 'true');
+  }
+  endOnboarding();
+}
+
+function endOnboarding() {
+  localStorage.setItem('hasSeenOnboarding', 'true');
+  
+  const overlay = document.getElementById('onboarding-overlay');
+  if (overlay) {
+    overlay.style.opacity = '0';
+    setTimeout(() => overlay.remove(), 300);
+  }
+  
+  const highlighted = document.querySelector('.onboarding-highlight');
+  if (highlighted) {
+    highlighted.classList.remove('onboarding-highlight');
+    highlighted.style.position = '';
+    highlighted.style.zIndex = '';
+  }
+  
+  showToast('✨ Bem-vindo ao Dashboard! Explore à vontade.', 'success');
+}
+
+// Função para resetar onboarding (útil para testes)
+function resetOnboarding() {
+  localStorage.removeItem('hasSeenOnboarding');
+  showToast('Onboarding resetado. Recarregue a página.', 'info');
+}
+</script>
+
+<style>
+.onboarding-highlight {
+  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.5), 0 0 0 8px rgba(59, 130, 246, 0.2) !important;
+  border-radius: 0.75rem !important;
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-slideUp {
+  animation: slideUp 0.3s ease-out;
+}
+</style>
