@@ -8,6 +8,11 @@
         END_DATE = new Date(now.getFullYear(), now.getMonth() + 1, 0);
         FILTER_MODE = 'this_month';
 
+        // Inicializa atalhos de teclado
+        if (typeof initKeyboardShortcuts === 'function') {
+            initKeyboardShortcuts();
+        }
+
         if (typeof google === 'undefined' || !google.script) {
            document.getElementById('app').innerHTML = '<p class="text-red-500 text-center mt-10">Este painel deve ser executado no Google Apps Script.</p>';
         } else {
@@ -18,6 +23,14 @@
                  if(!GLOBAL_DATA || GLOBAL_DATA.error) throw new Error("Erro nos dados");
                  LAST_UPDATE_TIME = new Date(GLOBAL_DATA.lastUpdate);
                  renderApp();
+                 
+                 // Inicia onboarding se necessário (após 1 segundo)
+                 setTimeout(() => {
+                     if (typeof startOnboarding === 'function') {
+                         startOnboarding();
+                     }
+                 }, 1000);
+                 
                } catch (e) {
                  document.getElementById('app').innerHTML = `<p class="text-red-500 text-center mt-10">Erro ao processar dados: ${e.message}</p>`;
                }
