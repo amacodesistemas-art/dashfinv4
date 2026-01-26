@@ -301,27 +301,6 @@ function getPeriodName(mode) {
   
   return names[mode] || 'Periodo Atual';
 }
-    prompt += 'Contexto Financeiro do Cliente:\n' + context + '\n\n';
-    prompt += 'Pergunta do Cliente: ' + question + '\n\n';
-    prompt += 'INSTRUCOES:\n';
-    prompt += '- Responda considerando APENAS os dados do periodo atual mostrado\n';
-    prompt += '- Use os valores exatos do contexto\n';
-    prompt += '- Compare com periodo anterior quando relevante\n';
-    prompt += '- Seja especifico com categorias e valores\n';
-    prompt += '- De recomendacoes praticas e acionaveis\n';
-    prompt += '- Tom conversacional, use emojis quando apropriado\n';
-    prompt += '- Maximo 200 palavras\n\n';
-    prompt += 'Resposta:';
-    
-    // Chama OpenAI
-    var response = callOpenAI(apiKey, prompt, 400);
-    return response;
-    
-  } catch (error) {
-    Logger.log('[AI Chat] Erro: ' + error.message);
-    return 'Desculpe, tive um problema ao processar sua pergunta. Erro: ' + error.message;
-  }
-}
 
 // Prepara contexto financeiro
 function prepareFinancialContext(data, stats) {
