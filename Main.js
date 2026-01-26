@@ -105,6 +105,180 @@ function askAIFinancialQuestion(question, contextData) {
     // Monta prompt para IA com contexto rico
     var prompt = 'Voce e um assistente financeiro brasileiro especializado e amigavel.\n\n';
     prompt += 'IMPORTANTE: Responda SEMPRE considerando APENAS o periodo filtrado mencionado no contexto.\n\n';
+// Calcula periodo anterior para comparacao
+function calculatePreviousPeriod(currentTransactions, allTransactions, startDate, endDate) {
+  if (!startDate || !endDate) return { entradas: 0, saidas: 0, saldo: 0 };
+  
+  var periodDays = Math.round((endDate - startDate) / (1000 * 60 * 60 * 24));
+  var prevEndDate = new Date(startDate);
+  prevEndDate.setDate(prevEndDate.getDate() - 1);
+  var prevStartDate = new Date(prevEndDate);
+  prevStartDate.setDate(prevStartDate.getDate() - periodDays);
+  
+  var prevTransactions = allTransactions.filter(function(t) {
+    var tDate = new Date(t.date);
+    return tDate >= prevStartDate && tDate <= prevEndDate;
+  });
+  
+  var entradas = 0;
+  var saidas = 0;
+  
+  prevTransactions.forEach(function(t) {
+    if (t.type === 'Entrada') {
+      entradas += t.value;
+    } else {
+      saidas += t.value;
+    }
+  });
+  
+  return {
+    entradas: entradas,
+    saidas: saidas,
+    saldo: entradas - saidas,
+    count: prevTransactions.length
+  };
+}
+
+// Prepara contexto financeiro aprimorado
+function prepareEnhancedFinancialContext(transactions, stats, period, previousPeriod, contextData) {
+  // Nome do periodo
+  var periodName = getPeriodName(period.mode);
+  
+  // Top 5 categorias de gasto
+  var gastos = {};
+  transactions.filter(function(t) { return t.type === 'Saida'; }).forEach(function(t) {
+    gastos[t.category] = (gastos[t.category] || 0) + t.value;
+  });
+  
+  var topGastos = Object.keys(gastos)
+    .map(function(key) { return [key, gastos[key]]; })
+    .sort(function(a, b) { return b[1] - a[1]; })
+    .slice(0, 5);
+  
+  // Top 5 fontes de receita
+  var receitas = {};
+  transactions.filter(function(t) { return t.type === 'Entrada'; }).forEach(function(t) {
+    var fonte = t.category || 'Outros';
+    receitas[fonte] = (receitas[fonte] || 0) + t.value;
+  });
+  
+  var topReceitas = Object.keys(receitas)
+    .map(function(key) { return [key, receitas[key]]; })
+    .sort(function(a, b) { return b[1] - a[1]; })
+    .slice(0, 3);
+  
+  // Transacoes pendentes
+  var pendentes = transactions.filter(function(t) {
+    var status = (t.status || '').toLowerCase();
+    return status.indexOf('pago') === -1 && status.indexOf('concluido') === -1;
+  });
+  
+  var pendenteTotal = pendentes.reduce(function(s, t) { return s + t.value; }, 0);
+  
+  // Calcula variacoes
+  var varReceita = previousPeriod.entradas > 0 
+    ? ((stats.entradas - previousPeriod.entradas) / previousPeriod.entradas * 100).toFixed(1)
+    : 'N/A';
+  
+  var varDespesa = previousPeriod.saidas > 0
+    ? ((stats.saidas - previousPeriod.saidas) / previousPeriod.saidas * 100).toFixed(1)
+    : 'N/A';
+  
+  var varSaldo = previousPeriod.saldo !== 0
+    ? ((stats.saldo - previousPeriod.saldo) / Math.abs(previousPeriod.saldo) * 100).toFixed(1)
+    : 'N/A';
+  
+  // Monta contexto
+  var context = '=== PERIODO ATUAL: ' + periodName + ' ===\n';
+  context += 'Data Inicio: ' + period.start + '\n';
+  context += 'Data Fim: ' + period.end + '\n\n';
+  
+  context += '--- RESUMO FINANCEIRO ---\n';
+  context += 'Receitas: R$ ' + stats.entradas.toFixed(2);
+  if (varReceita !== 'N/A') {
+    context += ' (' + (varReceita > 0 ? '+' : '') + varReceita + '% vs periodo anterior)\n';
+  } else {
+    context += '\n';
+  }
+  
+  context += 'Despesas: R$ ' + stats.saidas.toFixed(2);
+  if (varDespesa !== 'N/A') {
+    context += ' (' + (varDespesa > 0 ? '+' : '') + varDespesa + '% vs periodo anterior)\n';
+  } else {
+    context += '\n';
+  }
+  
+  context += 'Saldo: R$ ' + stats.saldo.toFixed(2);
+  if (varSaldo !== 'N/A') {
+    context += ' (' + (varSaldo > 0 ? '+' : '') + varSaldo + '% vs periodo anterior)\n';
+  } else {
+    context += '\n';
+  }
+  
+  context += 'Score de Saude Financeira: ' + stats.healthScore + '/100\n';
+  context += 'Total de Transacoes no Periodo: ' + transactions.length + '\n\n';
+  
+  context += '--- TOP DESPESAS DO PERIODO ---\n';
+  if (topGastos.length > 0) {
+    topGastos.forEach(function(item, idx) {
+      var percentual = stats.saidas > 0 ? (item[1] / stats.saidas * 100).toFixed(1) : 0;
+      context += (idx + 1) + '. ' + item[0] + ': R$ ' + item[1].toFixed(2) + ' (' + percentual + '% do total)\n';
+    });
+  } else {
+    context += 'Nenhuma despesa no periodo\n';
+  }
+  
+  context += '\n--- TOP RECEITAS DO PERIODO ---\n';
+  if (topReceitas.length > 0) {
+    topReceitas.forEach(function(item, idx) {
+      var percentual = stats.entradas > 0 ? (item[1] / stats.entradas * 100).toFixed(1) : 0;
+      context += (idx + 1) + '. ' + item[0] + ': R$ ' + item[1].toFixed(2) + ' (' + percentual + '% do total)\n';
+    });
+  } else {
+    context += 'Nenhuma receita no periodo\n';
+  }
+  
+  context += '\n--- CONTAS PENDENTES ---\n';
+  context += 'Quantidade: ' + pendentes.length + '\n';
+  context += 'Valor Total: R$ ' + pendenteTotal.toFixed(2) + '\n';
+  
+  if (pendentes.length > 0) {
+    var maioresPendentes = pendentes
+      .sort(function(a, b) { return b.value - a.value; })
+      .slice(0, 3);
+    
+    context += 'Maiores:\n';
+    maioresPendentes.forEach(function(p, idx) {
+      context += '  ' + (idx + 1) + '. ' + p.description + ': R$ ' + p.value.toFixed(2) + ' (' + p.category + ')\n';
+    });
+  }
+  
+  context += '\n--- COMPARACAO COM PERIODO ANTERIOR ---\n';
+  context += 'Periodo Anterior:\n';
+  context += '  Receitas: R$ ' + previousPeriod.entradas.toFixed(2) + '\n';
+  context += '  Despesas: R$ ' + previousPeriod.saidas.toFixed(2) + '\n';
+  context += '  Saldo: R$ ' + previousPeriod.saldo.toFixed(2) + '\n';
+  context += '  Transacoes: ' + previousPeriod.count + '\n';
+  
+  return context;
+}
+
+// Retorna nome do periodo
+function getPeriodName(mode) {
+  var names = {
+    'this_week': 'Esta Semana',
+    'last_week': 'Semana Passada',
+    'this_month': 'Este Mes',
+    'last_month': 'Mes Passado',
+    'last_90': 'Ultimos 90 Dias',
+    'this_year': 'Este Ano',
+    'last_year': 'Ano Passado',
+    'all': 'Desde o Inicio',
+    'custom': 'Periodo Personalizado'
+  };
+  
+  return names[mode] || 'Periodo Atual';
+}
     prompt += 'Contexto Financeiro do Cliente:\n' + context + '\n\n';
     prompt += 'Pergunta do Cliente: ' + question + '\n\n';
     prompt += 'INSTRUCOES:\n';
