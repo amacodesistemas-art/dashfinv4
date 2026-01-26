@@ -1,0 +1,211 @@
+<script>
+// ===================================
+// ENHANCED SMART INSIGHTS
+// ===================================
+
+function generateEnhancedInsights(currentStats, lastStats, currentTxs, allTxs) {
+  const insights = [];
+  
+  // 1. Comparação com período anterior
+  const diffSaldo = currentStats.saldo - lastStats.saldo;
+  if (diffSaldo > 0) {
+    const percentChange = lastStats.saldo !== 0 ? ((diffSaldo / Math.abs(lastStats.saldo)) * 100).toFixed(1) : 100;
+    insights.push({ 
+      icon: 'trending-up', 
+      color: 'green', 
+      text: `Melhoria de ${formatCurrency(diffSaldo)} (${percentChange}%) no resultado comparado ao período anterior.`,
+      priority: 'high'
+    });
+  } else if (diffSaldo < 0) {
+    const percentChange = lastStats.saldo !== 0 ? ((Math.abs(diffSaldo) / Math.abs(lastStats.saldo)) * 100).toFixed(1) : 100;
+    insights.push({ 
+      icon: 'trending-down', 
+      color: 'orange', 
+      text: `Resultado ${formatCurrency(Math.abs(diffSaldo))} (${percentChange}%) menor que o período anterior. Revise gastos não essenciais.`,
+      priority: 'high'
+    });
+  }
+  
+  // 2. Top Categoria de Gasto
+  const gastos = {};
+  currentTxs.filter(t => t.type === 'Saída').forEach(t => {
+    gastos[t.category] = (gastos[t.category] || 0) + t.value;
+  });
+  const topGasto = Object.entries(gastos).sort((a, b) => b[1] - a[1])[0];
+  if (topGasto) {
+    const percentOfTotal = currentStats.saidas > 0 ? ((topGasto[1] / currentStats.saidas) * 100).toFixed(1) : 0;
+    insights.push({ 
+      icon: 'pie-chart', 
+      color: 'purple', 
+      text: `Maior despesa: "${topGasto[0]}" (${formatCurrency(topGasto[1])}, ${percentOfTotal}% do total).`,
+      priority: 'medium'
+    });
+  }
+  
+  // 3. Burn Rate (Taxa de Queima Mensal)
+  if (currentStats.saidas > 0) {
+    const daysCovered = (END_DATE - START_DATE) / (1000 * 60 * 60 * 24);
+    const dailyBurn = currentStats.saidas / daysCovered;
+    const monthlyBurn = dailyBurn * 30;
+    
+    insights.push({
+      icon: 'flame',
+      color: 'orange',
+      text: `Taxa de queima estimada: ${formatCurrency(monthlyBurn)}/mês (${formatCurrency(dailyBurn)}/dia).`,
+      priority: 'medium'
+    });
+  }
+  
+  // 4. Runway (Pista de Pouso - Meses até zerar)
+  const totalPatrimonio = GLOBAL_DATA.accounts.reduce((s, a) => s + a.balance, 0);
+  if (totalPatrimonio > 0 && currentStats.saldo < 0) {
+    const monthlyDeficit = Math.abs(currentStats.saldo);
+    const monthsRemaining = totalPatrimonio / monthlyDeficit;
+    
+    if (monthsRemaining < 6) {
+      insights.push({
+        icon: 'alert-triangle',
+        color: 'red',
+        text: `⚠️ Atenção: Com o déficit atual, o patrimônio dura apenas ${monthsRemaining.toFixed(1)} meses. Ação urgente necessária!`,
+        priority: 'critical'
+      });
+    } else if (monthsRemaining < 12) {
+      insights.push({
+        icon: 'alert-circle',
+        color: 'orange',
+        text: `Runway atual: ${monthsRemaining.toFixed(1)} meses. Considere otimizar custos ou aumentar receitas.`,
+        priority: 'high'
+      });
+    }
+  }
+  
+  // 5. Taxa de Poupança
+  if (currentStats.entradas > 0) {
+    const savingsRate = (currentStats.saldo / currentStats.entradas) * 100;
+    if (savingsRate >= 20) {
+      insights.push({
+        icon: 'piggy-bank',
+        color: 'green',
+        text: `🎉 Excelente! Taxa de poupança de ${savingsRate.toFixed(1)}% (recomendado: >20%).`,
+        priority: 'low'
+      });
+    } else if (savingsRate >= 10) {
+      insights.push({
+        icon: 'target',
+        color: 'blue',
+        text: `Taxa de poupança: ${savingsRate.toFixed(1)}%. Tente alcançar 20% para segurança financeira ideal.`,
+        priority: 'medium'
+      });
+    } else if (savingsRate > 0) {
+      insights.push({
+        icon: 'alert-circle',
+        color: 'orange',
+        text: `Taxa de poupança baixa: ${savingsRate.toFixed(1)}%. Revise despesas fixas para aumentar margem.`,
+        priority: 'high'
+      });
+    } else {
+      insights.push({
+        icon: 'alert-triangle',
+        color: 'red',
+        text: `⚠️ Sem poupança no período. Despesas excedem receitas. Revisão orçamentária urgente!`,
+        priority: 'critical'
+      });
+    }
+  }
+  
+  // 6. Concentração de Receita (Top Cliente)
+  const receitas = {};
+  currentTxs.filter(t => t.type === 'Entrada').forEach(t => {
+    const key = t.description || 'Sem descrição';
+    receitas[key] = (receitas[key] || 0) + t.value;
+  });
+  const topReceita = Object.entries(receitas).sort((a, b) => b[1] - a[1])[0];
+  if (topReceita && currentStats.entradas > 0) {
+    const concentration = (topReceita[1] / currentStats.entradas) * 100;
+    if (concentration > 50) {
+      insights.push({
+        icon: 'users',
+        color: 'orange',
+        text: `Alta concentração: "${topReceita[0]}" representa ${concentration.toFixed(1)}% das receitas. Diversifique clientes para reduzir risco.`,
+        priority: 'medium'
+      });
+    }
+  }
+  
+  // 7. Velocidade do Fluxo de Caixa
+  const txCount = currentTxs.length;
+  if (txCount > 0) {
+    const daysCovered = (END_DATE - START_DATE) / (1000 * 60 * 60 * 24);
+    const avgDailyTx = txCount / daysCovered;
+    
+    if (avgDailyTx < 1) {
+      insights.push({
+        icon: 'activity',
+        color: 'blue',
+        text: `Fluxo de caixa tranquilo: ${avgDailyTx.toFixed(1)} transações/dia em média.`,
+        priority: 'low'
+      });
+    } else if (avgDailyTx > 10) {
+      insights.push({
+        icon: 'zap',
+        color: 'purple',
+        text: `Fluxo intenso: ${avgDailyTx.toFixed(1)} transações/dia. Considere automação de processos.`,
+        priority: 'low'
+      });
+    }
+  }
+  
+  // 8. Análise de Inadimplência
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const overdue = allTxs.filter(t => {
+    const tDate = parseDate(t.date);
+    const isPendente = !t.status || !['pago', 'concluído', 'recebido'].includes(t.status.toLowerCase());
+    return tDate < today && isPendente && t.type === 'Entrada';
+  });
+  
+  if (overdue.length > 0) {
+    const overdueValue = overdue.reduce((acc, t) => acc + t.value, 0);
+    insights.push({
+      icon: 'alert-octagon',
+      color: 'red',
+      text: `🚨 ${overdue.length} fatura(s) em atraso totalizando ${formatCurrency(overdueValue)}. Acione cobrança imediatamente!`,
+      priority: 'critical'
+    });
+  }
+  
+  // 9. Capital de Giro
+  if (totalPatrimonio > 0 && currentStats.saidas > 0) {
+    const workingCapitalMonths = totalPatrimonio / (currentStats.saidas / ((END_DATE - START_DATE) / (1000 * 60 * 60 * 24 * 30)));
+    
+    if (workingCapitalMonths < 3) {
+      insights.push({
+        icon: 'wallet',
+        color: 'orange',
+        text: `Capital de giro para ${workingCapitalMonths.toFixed(1)} meses. Ideal: >6 meses de operação.`,
+        priority: 'high'
+      });
+    }
+  }
+  
+  // 10. Tendência de Crescimento
+  if (lastStats.entradas > 0 && currentStats.entradas > lastStats.entradas) {
+    const growth = ((currentStats.entradas - lastStats.entradas) / lastStats.entradas) * 100;
+    if (growth > 10) {
+      insights.push({
+        icon: 'rocket',
+        color: 'green',
+        text: `🚀 Crescimento de ${growth.toFixed(1)}% nas receitas! Momento de escalar operações.`,
+        priority: 'low'
+      });
+    }
+  }
+  
+  // Ordena por prioridade: critical > high > medium > low
+  const priorityOrder = { 'critical': 0, 'high': 1, 'medium': 2, 'low': 3 };
+  insights.sort((a, b) => priorityOrder[a.priority] - priorityOrder[b.priority]);
+  
+  // Retorna no máximo 5 insights mais relevantes
+  return insights.slice(0, 5);
+}
+</script>
