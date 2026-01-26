@@ -6,7 +6,12 @@
     // Registra Service Worker para PWA
     if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-            navigator.serviceWorker.register('service-worker.js')
+            // Obtém a URL base do script atual
+            const scriptUrl = document.currentScript?.src || window.location.href;
+            const baseUrl = scriptUrl.split('?')[0];
+            const swUrl = baseUrl + '?file=sw';
+            
+            navigator.serviceWorker.register(swUrl)
                 .then((registration) => {
                     console.log('✅ Service Worker registrado:', registration.scope);
                     
@@ -15,7 +20,6 @@
                         const newWorker = registration.installing;
                         newWorker.addEventListener('statechange', () => {
                             if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                                // Nova versão disponível
                                 showUpdateNotification();
                             }
                         });
@@ -23,6 +27,7 @@
                 })
                 .catch((error) => {
                     console.log('⚠️ Service Worker não registrado:', error);
+                    // Não bloqueia a aplicação se SW falhar
                 });
         });
     }
