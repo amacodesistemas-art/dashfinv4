@@ -464,14 +464,30 @@ function renderCashFlowDashboard(currentStats, lastStats, currentTxs, health, in
         <div class="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 transition-all hover:shadow-lg">
             <h3 class="font-bold text-slate-800 dark:text-white mb-4 flex items-center gap-2">
                 <i data-lucide="lightbulb" class="text-yellow-500 w-5 h-5"></i> Análise Inteligente
+                <span class="text-xs text-slate-400 font-normal ml-auto">Powered by AI</span>
             </h3>
             <div class="space-y-3">
-                ${insights.length > 0 ? insights.map(insight => `
-                    <div class="p-4 ${insight.color === 'green' ? 'bg-green-50 dark:bg-green-900/20 border-green-100 dark:border-green-800 text-green-800 dark:text-green-300' : insight.color === 'orange' ? 'bg-orange-50 dark:bg-orange-900/20 border-orange-100 dark:border-orange-800 text-orange-800 dark:text-orange-300' : insight.color === 'blue' ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-100 dark:border-blue-800 text-blue-800 dark:text-blue-300' : 'bg-purple-50 dark:bg-purple-900/20 border-purple-100 dark:border-purple-800 text-purple-800 dark:text-purple-300'} border rounded-xl text-sm flex gap-3 items-start transition-all hover:scale-105">
-                        <i data-lucide="${insight.icon}" class="w-5 h-5 mt-0.5 shrink-0"></i>
-                        <span>${insight.text}</span>
-                    </div>
-                `).join('') : '<p class="text-slate-400 text-sm">Sem dados suficientes.</p>'}
+                ${insights.length > 0 ? insights.map(insight => {
+                    const priorityStyles = {
+                        'critical': 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-800 dark:text-red-300',
+                        'high': 'bg-orange-50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-800 text-orange-800 dark:text-orange-300',
+                        'medium': insight.color === 'blue' ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-300' : 'bg-purple-50 dark:bg-purple-900/20 border-purple-200 dark:border-purple-800 text-purple-800 dark:text-purple-300',
+                        'low': 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 text-green-800 dark:text-green-300'
+                    };
+                    
+                    const colorStyles = insight.priority ? priorityStyles[insight.priority] : 
+                        (insight.color === 'green' ? priorityStyles.low : 
+                         insight.color === 'orange' ? priorityStyles.high : 
+                         insight.color === 'red' ? priorityStyles.critical : 
+                         priorityStyles.medium);
+                    
+                    return `
+                        <div class="p-4 ${colorStyles} border rounded-xl text-sm flex gap-3 items-start transition-all hover:scale-[1.02] cursor-default">
+                            <i data-lucide="${insight.icon}" class="w-5 h-5 mt-0.5 shrink-0"></i>
+                            <span class="flex-1">${insight.text}</span>
+                        </div>
+                    `;
+                }).join('') : '<p class="text-slate-400 text-sm">Sem dados suficientes para análise.</p>'}
             </div>
         </div>
         
