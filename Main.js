@@ -54,7 +54,7 @@ function include(filename) {
 }
 
 // Função para processar perguntas do chatbot de IA
-function askAIFinancialQuestion(question, dashboardData) {
+function askAIFinancialQuestion(question, contextData) {
   try {
     // Verifica se tem API key configurada
     var ss = SpreadsheetApp.openById(getSpreadsheetId());
@@ -80,24 +80,45 @@ function askAIFinancialQuestion(question, dashboardData) {
       return 'Recurso de IA nao configurado. Entre em contato com seu consultor para ativar.';
     }
     
-    // Prepara contexto financeiro
-    var stats = calculateStats(dashboardData);
-    var context = prepareFinancialContext(dashboardData, stats);
+    // Filtra transacoes pelo periodo atual
+    var period = contextData.period || {};
+    var startDate = period.start ? new Date(period.start) : null;
+    var endDate = period.end ? new Date(period.end) : null;
     
-    // Monta prompt para IA
-    var prompt = 'Voce e um assistente financeiro especializado e amigavel.\n\n';
+    var allTransactions = contextData.transactions || [];
+    var filteredTransactions = allTransactions;
+    
+    if (startDate && endDate) {
+      filteredTransactions = allTransactions.filter(function(t) {
+        var tDate = new Date(t.date);
+        return tDate >= startDate && tDate <= endDate;
+      });
+    }
+    
+    // Calcula periodo anterior para comparacao
+    var previousPeriod = calculatePreviousPeriod(filteredTransactions, allTransactions, startDate, endDate);
+    
+    // Prepara contexto financeiro
+    var stats = calculateStats({ transactions: filteredTransactions, accounts: contextData.accounts });
+    var context = prepareEnhancedFinancialContext(filteredTransactions, stats, period, previousPeriod, contextData);
+    
+    // Monta prompt para IA com contexto rico
+    var prompt = 'Voce e um assistente financeiro brasileiro especializado e amigavel.\n\n';
+    prompt += 'IMPORTANTE: Responda SEMPRE considerando APENAS o periodo filtrado mencionado no contexto.\n\n';
     prompt += 'Contexto Financeiro do Cliente:\n' + context + '\n\n';
     prompt += 'Pergunta do Cliente: ' + question + '\n\n';
-    prompt += 'Responda de forma:\n';
-    prompt += '- Clara e objetiva\n';
-    prompt += '- Usando dados reais do contexto\n';
-    prompt += '- Dando recomendacoes praticas\n';
-    prompt += '- Tom conversacional e acessivel\n';
-    prompt += '- Maximo 150 palavras\n\n';
+    prompt += 'INSTRUCOES:\n';
+    prompt += '- Responda considerando APENAS os dados do periodo atual mostrado\n';
+    prompt += '- Use os valores exatos do contexto\n';
+    prompt += '- Compare com periodo anterior quando relevante\n';
+    prompt += '- Seja especifico com categorias e valores\n';
+    prompt += '- De recomendacoes praticas e acionaveis\n';
+    prompt += '- Tom conversacional, use emojis quando apropriado\n';
+    prompt += '- Maximo 200 palavras\n\n';
     prompt += 'Resposta:';
     
     // Chama OpenAI
-    var response = callOpenAI(apiKey, prompt, 300);
+    var response = callOpenAI(apiKey, prompt, 400);
     return response;
     
   } catch (error) {
