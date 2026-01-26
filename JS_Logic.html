@@ -53,8 +53,14 @@
         };
     }
 
-    // Gera Insights (Texto e Dicas)
+    // Gera Insights (Texto e Dicas) - DEPRECATED - Use generateEnhancedInsights
     function generateInsights(currentStats, lastStats, currentTxs) {
+        // Mantido para compatibilidade, mas agora delega para a versão aprimorada
+        if (typeof generateEnhancedInsights === 'function') {
+            return generateEnhancedInsights(currentStats, lastStats, currentTxs, GLOBAL_DATA.transactions);
+        }
+        
+        // Fallback caso o módulo não esteja carregado
         const insights = [];
         const diffSaldo = currentStats.saldo - lastStats.saldo;
 
