@@ -141,6 +141,13 @@
                  LAST_UPDATE_TIME = new Date(GLOBAL_DATA.lastUpdate);
                  renderApp();
                  
+                 // Inicializa chat IA (se disponível)
+                 setTimeout(() => {
+                     if (typeof initChat === 'function') {
+                         initChat();
+                     }
+                 }, 1500);
+                 
                  // Inicia onboarding se necessário (após 1 segundo)
                  setTimeout(() => {
                      if (typeof startOnboarding === 'function') {
