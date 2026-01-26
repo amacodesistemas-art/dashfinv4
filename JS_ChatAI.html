@@ -207,6 +207,19 @@ async function askQuestion(question) {
     // Mostra typing indicator
     const typingId = showTyping();
     
+    // Prepara contexto completo (período filtrado atual)
+    const currentContext = {
+        transactions: GLOBAL_DATA.transactions,
+        accounts: GLOBAL_DATA.accounts,
+        period: {
+            start: START_DATE.toISOString().split('T')[0],
+            end: END_DATE.toISOString().split('T')[0],
+            mode: FILTER_MODE
+        },
+        viewMode: VIEW_MODE,
+        config: GLOBAL_DATA.config
+    };
+    
     // Chama IA (via Apps Script)
     try {
         google.script.run
@@ -218,7 +231,7 @@ async function askQuestion(question) {
                 hideTyping(typingId);
                 showAIResponse('Desculpe, tive um problema ao processar sua pergunta. Tente novamente.');
             })
-            .askAIFinancialQuestion(question, GLOBAL_DATA);
+            .askAIFinancialQuestion(question, currentContext);
     } catch (error) {
         hideTyping(typingId);
         showAIResponse('Erro ao conectar com a IA. Verifique sua conexão.');
