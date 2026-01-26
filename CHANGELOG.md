@@ -1,14 +1,35 @@
-# ✨ Melhorias Implementadas - Dashboard Financeiro B2B v3.0
+# ✨ Melhorias Implementadas - Dashboard Financeiro B2B v3.1
 
 ## 📋 Resumo das Implementações
 
-Data: Janeiro 2025
-Versão: 3.0.0
+Data: Dezembro 2025
+Versão: 3.1.0
 Status: ✅ Completo
 
 ---
 
-## 🎯 Objetivo
+## 🔧 Correções v3.1.0 (Dezembro 2025)
+
+### Correção: Chatbot de IA agora respeita filtros de data
+
+**Problema**: O chatbot de IA estava a fornecer insights baseados em todo o histórico de transações, ignorando o período selecionado pelo utilizador na interface.
+
+**Solução implementada** (`Main.js`):
+
+1. **Parsing de datas corrigido**: As datas de início/fim agora são parseadas corretamente com horas definidas (00:00:00 para início, 23:59:59 para fim) garantindo que todas as transações do dia sejam incluídas.
+
+2. **Filtragem de transações corrigida**: O formato de data das transações (`YYYY-MM-DD`) agora é parseado corretamente usando `split('-')` em vez de `new Date(string)` que pode ter comportamentos inconsistentes.
+
+3. **Bug de acentuação corrigido**: `'Saida'` → `'Saída'` para corresponder ao formato dos dados.
+
+4. **Logging para debug**: Adicionados logs para facilitar diagnóstico em caso de problemas futuros.
+
+**Ficheiros modificados**:
+- `Main.js` (linhas 83-114, 148-180)
+
+---
+
+## 🎯 Objetivo da v3.0
 
 Aprimorar o Dashboard Financeiro B2B com funcionalidades avançadas conforme especificação técnica, incluindo:
 - Atalhos de teclado
