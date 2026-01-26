@@ -1,0 +1,150 @@
+<script>
+    // ===================================
+    // GRÁFICOS (CHART.JS)
+    // ===================================
+
+    function destroyChart(id) { 
+        if(CHARTS_INSTANCES[id]) { 
+            CHARTS_INSTANCES[id].destroy(); 
+            delete CHARTS_INSTANCES[id]; 
+        } 
+    }
+    
+    function renderOverviewCharts(curr, last, currentTxs) {
+        const isDark = document.documentElement.classList.contains('dark');
+        const textColor = isDark ? '#94a3b8' : '#64748b';
+        const gridColor = isDark ? '#334155' : '#e2e8f0';
+
+        destroyChart('chartEvolution');
+        destroyChart('chartCategory');
+
+        // Gráfico Barras (Comparativo)
+        const ctxLine = document.getElementById('chartEvolution');
+        if(ctxLine) {
+            CHARTS_INSTANCES['chartEvolution'] = new Chart(ctxLine, {
+                type: 'bar',
+                data: { labels: ['Período Anterior', 'Período Atual'], datasets: [{ label: 'Entradas', data: [last.entradas, curr.entradas], backgroundColor: '#10b981' }, { label: 'Saídas', data: [last.saidas, curr.saidas], backgroundColor: '#ef4444' }, { label: 'Saldo', data: [last.saldo, curr.saldo], backgroundColor: '#3b82f6' }] },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { color: textColor } } }, scales: { y: { beginAtZero: true, grid: { color: gridColor }, ticks: { color: textColor } }, x: { grid: { display: false }, ticks: { color: textColor } } } }
+            });
+        }
+        
+        // Gráfico Rosca (Categorias)
+        const catMap = {};
+        currentTxs.filter(t => t.type === 'Saída').forEach(t => catMap[t.category] = (catMap[t.category] || 0) + t.value);
+        const ctxPie = document.getElementById('chartCategory');
+        if(ctxPie) {
+            CHARTS_INSTANCES['chartCategory'] = new Chart(ctxPie, {
+                type: 'doughnut',
+                data: { labels: Object.keys(catMap), datasets: [{ data: Object.values(catMap), backgroundColor: ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#6366f1'], borderWidth: 0, hoverOffset: 10 }] },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { color: textColor } }, tooltip: { callbacks: { label: c => c.label + ': ' + formatCurrency(c.parsed) } } } }
+            });
+        }
+    }
+    
+    function renderAccountChart(txs) {
+        const isDark = document.documentElement.classList.contains('dark');
+        const textColor = isDark ? '#94a3b8' : '#64748b';
+        const gridColor = isDark ? '#334155' : '#e2e8f0';
+        destroyChart('chartAccountTrend');
+        const sortedTxs = [...txs].sort((a, b) => new Date(a.date) - new Date(b.date));
+        const labels = [];
+        const dataPoints = [];
+        let acumulado = 0;
+        sortedTxs.forEach(t => { acumulado += (t.type === 'Entrada' ? t.value : -t.value); labels.push(formatDate(t.date).substring(0, 5)); dataPoints.push(acumulado); });
+        const ctx = document.getElementById('chartAccountTrend');
+        if(ctx) {
+            CHARTS_INSTANCES['chartAccountTrend'] = new Chart(ctx, {
+                type: 'line',
+                data: { labels: labels, datasets: [{ label: 'Saldo Acumulado', data: dataPoints, borderColor: '#3b82f6', backgroundColor: 'rgba(59, 130, 246, 0.1)', fill: true, tension: 0.4 }] },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { ticks: { color: textColor, callback: v => formatCurrency(v) }, grid: { color: gridColor } }, x: { ticks: { color: textColor }, grid: { display: false } } } }
+            });
+        }
+    }
+
+    function render12MonthsChart() {
+        const ctx = document.getElementById('chartMonthlyTrend');
+        if (!ctx) return;
+        destroyChart('chartMonthlyTrend');
+        
+        // Função auxiliar para simular dados se não tiver back-end ainda para isso
+        // Idealmente isso viria do JS_Logic
+        const data = (typeof getLast12MonthsData === 'function') ? getLast12MonthsData() : []; 
+
+        const isDark = document.documentElement.classList.contains('dark');
+        const textColor = isDark ? '#94a3b8' : '#64748b';
+        const gridColor = isDark ? '#334155' : '#e2e8f0';
+        
+        CHARTS_INSTANCES['chartMonthlyTrend'] = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: data.map(d => d.label),
+                datasets: [
+                    { label: 'Saldo Líquido', data: data.map(d => d.saldo), type: 'line', borderColor: '#3b82f6', backgroundColor: '#3b82f6', borderWidth: 2, tension: 0.4, pointRadius: 3, order: 0 },
+                    { label: 'Entradas', data: data.map(d => d.entradas), backgroundColor: '#10b981', order: 1 },
+                    { label: 'Saídas', data: data.map(d => d.saidas), backgroundColor: '#ef4444', order: 2 }
+                ]
+            },
+            options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, plugins: { legend: { position: 'bottom', labels: { color: textColor } }, tooltip: { callbacks: { label: function(context) { let label = context.dataset.label || ''; if (label) { label += ': '; } if (context.parsed.y !== null) { label += formatCurrency(context.parsed.y); } return label; } } } }, scales: { x: { grid: { display: false }, ticks: { color: textColor } }, y: { beginAtZero: true, grid: { color: gridColor }, ticks: { color: textColor, callback: function(value) { return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', notation: 'compact' }); } } } } }
+        });
+    } // <--- AQUI FALTAVA O FECHAMENTO DA FUNÇÃO ANTERIOR
+
+    function renderProjectionChart(txs, currentTotalBalance) {
+        const ctx = document.getElementById('chartProjection');
+        if (!ctx) return;
+        destroyChart('chartProjection');
+        
+        const data = getCashFlowProjection(txs, currentTotalBalance); // Função do JS_Logic
+        
+        const isDark = document.documentElement.classList.contains('dark');
+        const textColor = isDark ? '#94a3b8' : '#64748b';
+        const gridColor = isDark ? '#334155' : '#e2e8f0'; // Adicionado
+        
+        // Cores dinâmicas: Vermelho se saldo < 0
+        const pointColors = data.map(d => d.balance < 0 ? '#ef4444' : '#3b82f6');
+
+        CHARTS_INSTANCES['chartProjection'] = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: data.map(d => formatDate(d.date).substring(0,5)), // DD/MM
+                datasets: [{
+                    label: 'Saldo Projetado',
+                    data: data.map(d => d.balance),
+                    borderColor: '#3b82f6',
+                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    borderWidth: 2,
+                    pointBackgroundColor: pointColors,
+                    pointRadius: 4,
+                    fill: true,
+                    tension: 0.3,
+                    segment: {
+                        borderColor: ctx => ctx.p0.parsed.y < 0 || ctx.p1.parsed.y < 0 ? '#ef4444' : '#3b82f6',
+                        borderDash: ctx => ctx.p0.parsed.x > 0 ? undefined : undefined, 
+                    }
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: { callbacks: { label: c => formatCurrency(c.parsed.y) } },
+                    annotation: { // Linha do Zero
+                        annotations: {
+                            line1: {
+                                type: 'line',
+                                yMin: 0,
+                                yMax: 0,
+                                borderColor: 'rgba(100,100,100,0.3)',
+                                borderWidth: 1
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    y: { ticks: { color: textColor, callback: v => formatCurrency(v) }, grid: { color: gridColor } },
+                    x: { ticks: { color: textColor }, grid: { display: false } }
+                }
+            }
+        });
+    }
+</script>

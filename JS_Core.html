@@ -1,0 +1,169 @@
+<script>
+    // ===================================
+    // VARIÁVEIS GLOBAIS
+    // ===================================
+    let GLOBAL_DATA = null;
+    let CURRENT_VIEW = 'overview';
+    let SELECTED_ACCOUNT = null;
+    let SELECTED_SUBCATEGORIES = [];
+    let CHARTS_INSTANCES = {};
+    
+    // --- NOVO: CONTROLE DE PAGINAÇÃO ---
+    let CURRENT_PAGE = 1;
+    const ITEMS_PER_PAGE = 15;
+    // -----------------------------------
+
+    // Datas e Filtros
+    let START_DATE = new Date(); 
+    let END_DATE = new Date();   
+    let FILTER_MODE = 'this_month';
+    
+    // ... (Mantenha o resto do arquivo igual, formatadores, toast, etc.) ...
+    // Se não tiver certeza, mantenha o resto do código abaixo igual ao que você já tem.
+    
+    let TRANSACTION_SEARCH_QUERY = ''; 
+    let SEARCH_TIMEOUT = null; 
+    let IS_PRIVACY_MODE = false;
+    let LAST_UPDATE_TIME = null;
+    let IS_LOADING = false;
+    let IS_DRE_MODE = false; // Toggle para DRE
+
+let ADVANCED_FILTERS = {
+        category: '',
+        type: '',
+        costCenter: '',
+        status: '', // <--- ADICIONE ISSO AQUI
+        minValue: null,
+        maxValue: null
+    };
+
+    // ===================================
+    // UTILITÁRIOS E FORMATADORES
+    // ===================================
+    const formatCurrency = (val) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
+    const parseDate = (str) => { const [y, m, d] = str.split('-'); return new Date(y, m - 1, d); }
+    const formatDate = (dateStr) => {
+        if(!dateStr) return "-";
+        try {
+            const parts = dateStr.split('-');
+            if(parts.length === 3) return new Date(parts[0], parts[1]-1, parts[2]).toLocaleDateString('pt-BR');
+            return new Date(dateStr).toLocaleDateString('pt-BR');
+        } catch(e) { return dateStr; }
+    };
+
+    function showToast(message, type = 'info', duration = 3000) {
+        const toast = document.createElement('div');
+        toast.className = `toast ${type}`;
+        toast.innerHTML = `<div class="flex items-center gap-2"><i data-lucide="${type === 'success' ? 'check-circle' : type === 'error' ? 'x-circle' : 'info'}" class="w-5 h-5"></i><span>${message}</span></div>`;
+        document.body.appendChild(toast);
+        lucide.createIcons();
+        setTimeout(() => { toast.style.opacity = '0'; toast.style.transform = 'translateX(100%)'; setTimeout(() => toast.remove(), 300); }, duration);
+    }
+
+    function toggleDarkMode() {
+        const html = document.documentElement;
+        const isDark = html.classList.toggle('dark');
+        const icon = document.getElementById('dark-icon');
+        icon.setAttribute('data-lucide', isDark ? 'sun' : 'moon');
+        lucide.createIcons();
+        localStorage.setItem('theme', isDark ? 'dark' : 'light');
+        renderApp();
+    }
+    if (localStorage.getItem('theme') === 'dark') { document.documentElement.classList.add('dark'); }
+
+    function togglePrivacy() {
+        IS_PRIVACY_MODE = !IS_PRIVACY_MODE;
+        const icon = document.getElementById('privacy-icon');
+        icon.setAttribute('data-lucide', IS_PRIVACY_MODE ? 'eye-off' : 'eye');
+        lucide.createIcons();
+        renderApp(); 
+    }
+
+    function getTimeSinceUpdate() {
+        if (!LAST_UPDATE_TIME) return 'Nunca';
+        const diff = Date.now() - LAST_UPDATE_TIME;
+        const minutes = Math.floor(diff / 60000);
+        if (minutes < 1) return 'Agora mesmo';
+        if (minutes === 1) return 'há 1 minuto';
+        if (minutes < 60) return `há ${minutes} minutos`;
+        const hours = Math.floor(minutes / 60);
+        const remainingMinutes = minutes % 60;
+        if (hours === 1) return remainingMinutes > 0 ? `há 1h ${remainingMinutes}m` : 'há 1 hora';
+        if (hours < 24) return remainingMinutes > 0 ? `há ${hours}h ${remainingMinutes}m` : `há ${hours} horas`;
+        const days = Math.floor(hours / 24);
+        return days === 1 ? 'Ontem' : `há ${days} dias`;
+    }
+
+    function getUpdateBadge() {
+        if (!LAST_UPDATE_TIME) return '';
+        const diff = Date.now() - LAST_UPDATE_TIME;
+        const minutes = Math.floor(diff / 60000);
+        if (minutes < 2) return '<span class="update-badge fresh pulse">● Atualizado</span>';
+        else if (minutes < 10) return '<span class="update-badge">● Recente</span>';
+        else return '<span class="update-badge stale">⚠ Desatualizado</span>';
+    }
+
+    setInterval(() => {
+        const timeDisplay = document.getElementById('last-update-text');
+        if (timeDisplay) timeDisplay.textContent = 'Atualizado: ' + getTimeSinceUpdate();
+        const badgeContainer = document.getElementById('update-badge-container');
+        if (badgeContainer) badgeContainer.innerHTML = getUpdateBadge();
+    }, 60000);
+
+// Função para calcular o status visual de uma transação
+function getTransactionVisualStatus(transaction) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tDate = parseDate(transaction.date);
+    
+    const status = transaction.status ? transaction.status.toLowerCase().trim() : '';
+    const isPago = status === 'pago' || status === 'concluído' || status === 'recebido';
+    
+    // Se está pago
+    if (isPago) {
+        return {
+            label: 'Pago',
+            icon: 'check-circle',
+            bgClass: 'bg-green-100 dark:bg-green-900/30',
+            textClass: 'text-green-700 dark:text-green-300',
+            borderClass: 'border-green-300 dark:border-green-700',
+            rowClass: 'opacity-60' // Linha mais apagada
+        };
+    }
+    
+    // Se está atrasado (data passou e não foi pago)
+    if (tDate < today) {
+        return {
+            label: 'Atrasado',
+            icon: 'alert-circle',
+            bgClass: 'bg-red-100 dark:bg-red-900/30',
+            textClass: 'text-red-700 dark:text-red-300',
+            borderClass: 'border-red-300 dark:border-red-700',
+            rowClass: 'bg-red-50/50 dark:bg-red-900/10' // Destaque vermelho
+        };
+    }
+    
+    // Se vence hoje
+    if (tDate.getTime() === today.getTime()) {
+        return {
+            label: 'Vence Hoje',
+            icon: 'clock',
+            bgClass: 'bg-orange-100 dark:bg-orange-900/30',
+            textClass: 'text-orange-700 dark:text-orange-300',
+            borderClass: 'border-orange-300 dark:border-orange-700',
+            rowClass: 'bg-orange-50/30 dark:bg-orange-900/10'
+        };
+    }
+    
+    // Se está pendente (futuro)
+    return {
+        label: 'Pendente',
+        icon: 'clock',
+        bgClass: 'bg-yellow-100 dark:bg-yellow-900/30',
+        textClass: 'text-yellow-700 dark:text-yellow-300',
+        borderClass: 'border-yellow-300 dark:border-yellow-700',
+        rowClass: ''
+    };
+}
+
+</script>

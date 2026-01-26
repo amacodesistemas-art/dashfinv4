@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Dashboard Financeiro</title>
+  
+  <!-- PWA Meta Tags -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+  <meta name="description" content="Sistema profissional de gestão financeira para empresas B2B">
+  <meta name="theme-color" content="#3b82f6">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="FinDash B2B">
+  
+  <!-- PWA Manifest -->
+  <link id="manifest-link" rel="manifest">
+  <script>
+    // Define manifest dinamicamente
+    (function() {
+      const manifestLink = document.getElementById('manifest-link');
+      const baseUrl = window.location.href.split('?')[0];
+      manifestLink.href = baseUrl + '?file=manifest';
+    })();
+  </script>
+  
+  <!-- Favicon/Icons -->
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='40' fill='%233b82f6'/%3E%3Cpath d='M50 30c-11 0-20 9-20 20s9 20 20 20 20-9 20-20-9-20-20-20zm0 30c-5.5 0-10-4.5-10-10s4.5-10 10-10 10 4.5 10 10-4.5 10-10 10z' fill='%23fff'/%3E%3C/svg%3E">
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: { extend: { colors: { slate: { 850: '#1e293b' } } } }
+    }
+  </script>
+  
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <?!= include('styles'); ?>
+</head>
+<body>
+
+  <div class="fixed bottom-6 right-6 z-50 flex flex-col gap-4 no-print">
+      <button onclick="showShortcutsHint()" class="p-4 bg-slate-600 text-white rounded-full shadow-xl hover:scale-110 active:scale-95 transition-all flex items-center justify-center" title="Atalhos de Teclado (?)">
+        <i data-lucide="keyboard" class="w-6 h-6"></i>
+      </button>
+      <button onclick="togglePrivacy()" class="p-4 bg-slate-700 text-white rounded-full shadow-xl hover:scale-110 active:scale-95 transition-all flex items-center justify-center" title="Privacidade (P)">
+        <i data-lucide="eye" id="privacy-icon" class="w-6 h-6"></i>
+      </button>
+      <button onclick="toggleDarkMode()" class="p-4 bg-indigo-600 text-white rounded-full shadow-2xl hover:scale-110 active:scale-95 transition-all flex items-center justify-center" title="Tema (D)">
+        <i data-lucide="moon" id="dark-icon" class="w-6 h-6"></i>
+      </button>
+  </div>
+
+  <div id="app" class="max-w-7xl mx-auto p-4 md:p-8">
+    <div class="loading-container space-y-6 animate-pulse">
+        <div class="flex justify-between items-center">
+            <div class="h-8 w-48 skeleton"></div>
+            <div class="h-8 w-32 skeleton"></div>
+        </div>
+        <div class="h-40 w-full skeleton rounded-2xl"></div>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div class="h-32 skeleton"></div>
+            <div class="h-32 skeleton"></div>
+            <div class="h-32 skeleton"></div>
+        </div>
+        <div class="h-96 skeleton"></div>
+    </div>
+  </div>
+
+  <?!= include('JS_Core'); ?>
+  <?!= include('JS_Logic'); ?>
+  <?!= include('JS_EnhancedInsights'); ?>
+  <?!= include('JS_Components'); ?>
+  <?!= include('JS_Events'); ?>
+  <?!= include('JS_Render'); ?>
+  <?!= include('JS_Charts'); ?>
+  <?!= include('JS_Keyboard'); ?>
+  <?!= include('JS_Onboarding'); ?>
+  <?!= include('JS_Init'); ?>
+</body>
+</html>

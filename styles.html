@@ -1,0 +1,270 @@
+<style>
+    /* --- VARIÁVEIS DE CORES (TEMA) --- */
+    :root { --bg-app: #f8fafc; --text-main: #334155; }
+    .dark { --bg-app: #0f172a; --text-main: #f1f5f9; }
+
+    /* --- RESPONSIVIDADE TABELA (MOBILE) --- */
+    @media (max-width: 640px) {
+        thead { display: none; }
+        tbody tr {
+            display: flex;
+            flex-direction: column;
+            border: 1px solid #e2e8f0;
+            border-radius: 0.75rem;
+            margin-bottom: 1rem;
+            padding: 1rem;
+            background: white;
+            box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+        }
+        tbody td {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.25rem 0 !important;
+            border: none !important;
+            text-align: right;
+        }
+        tbody td::before {
+            content: attr(data-label);
+            font-weight: 600;
+            color: #64748b;
+            text-align: left;
+            margin-right: 1rem;
+        }
+    }
+
+    /* --- ESTILOS GERAIS --- */
+    body { 
+        background: var(--bg-app); 
+        color: var(--text-main);
+        font-family: sans-serif; 
+        transition: background-color 0.3s ease, color 0.3s ease;
+        margin: 0;
+        -webkit-print-color-adjust: exact;
+    }
+
+    /* --- DARK MODE CUSTOMIZADO --- */
+    .dark .bg-white { background-color: #1e293b !important; border-color: #334155 !important; }
+    .dark .bg-slate-50 { background-color: #111827 !important; border-color: #334155 !important; }
+    .dark .bg-slate-100 { background-color: #1f2937 !important; }
+    .dark .text-slate-800 { color: #f8fafc !important; }
+    .dark .text-slate-700 { color: #cbd5e1 !important; }
+    .dark .text-slate-600 { color: #94a3b8 !important; }
+    .dark .text-slate-500 { color: #94a3b8 !important; }
+    .dark .text-slate-400 { color: #64748b !important; }
+    .dark .border-slate-100, .dark .border-slate-200, .dark .divide-slate-50 > * { border-color: #334155 !important; }
+    .dark input, .dark select { background-color: #0f172a !important; color: white !important; border-color: #475569 !important; }
+    .dark .hover\:bg-slate-50:hover { background-color: #2d3748 !important; }
+
+    /* --- EFEITO DE BLUR (PRIVACIDADE) --- */
+    .blur-content {
+        filter: blur(6px);
+        user-select: none;
+        cursor: default;
+        transition: filter 0.3s ease;
+    }
+    .blur-content:hover { filter: blur(2px); }
+
+    /* --- SKELETON LOADING (ANIMAÇÃO) --- */
+    .skeleton {
+        background: #e2e8f0;
+        background: linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%);
+        background-size: 200% 100%;
+        animation: shimmer 1.5s infinite;
+        border-radius: 6px;
+        color: transparent !important;
+    }
+    .dark .skeleton {
+        background: #1e293b;
+        background: linear-gradient(90deg, #1e293b 25%, #334155 50%, #1e293b 75%);
+    }
+    @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+    .loading-container { padding: 2rem; max-width: 80rem; margin: 0 auto; }
+
+    /* --- ANIMAÇÃO DE ROTAÇÃO (REFRESH BUTTON) --- */
+    .animate-spin {
+        animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+    }
+
+    /* --- TOAST NOTIFICATIONS --- */
+    .toast {
+        position: fixed;
+        top: 1rem;
+        right: 1rem;
+        z-index: 9999;
+        padding: 1rem 1.5rem;
+        border-radius: 0.5rem;
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        color: white;
+        font-weight: 500;
+        animation: slideIn 0.3s ease-out;
+        max-width: 350px;
+    }
+    @keyframes slideIn {
+        from { transform: translateX(100%); opacity: 0; }
+        to { transform: translateX(0); opacity: 1; }
+    }
+    .toast.success { background-color: #10b981; }
+    .toast.error { background-color: #ef4444; }
+    .toast.info { background-color: #3b82f6; }
+
+    /* --- REGRAS DE IMPRESSÃO --- */
+    @media print {
+        body { background: white !important; color: black !important; }
+        .no-print, button, .fixed { display: none !important; }
+        .bg-white, .dark .bg-white { background: white !important; border: 1px solid #ddd !important; box-shadow: none !important; }
+        .text-white { color: black !important; } 
+        .bg-gradient-to-r { background: none !important; border: 1px solid #000; color: black !important; }
+        .blur-content { filter: none !important; }
+        canvas { max-height: 250px !important; }
+        #app { padding: 0 !important; max-width: 100% !important; }
+        .page-break { page-break-before: always; }
+    }
+
+    /* --- UTILITÁRIOS --- */
+    .fade-in { animation: fadeIn 0.3s ease-in; }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    .cursor-pointer { cursor: pointer; }
+    .flex-wrap-gap-4 { flex-wrap: wrap; gap: 1rem; }
+    .hidden { display: none !important; }
+   
+    /* Inputs customizados */
+    input[type="date"], input[type="text"], input[type="number"], select {
+        border: 1px solid #e2e8f0;
+        border-radius: 0.5rem;
+        padding: 0.5rem;
+        color: #334155;
+        font-family: inherit;
+        outline: none;
+        background-color: transparent;
+    }
+    input:focus, select:focus { border-color: #3b82f6; ring: 2px solid #3b82f6; }
+
+    canvas { width: 100% !important; max-height: 300px; }
+
+    .transition-all { transition: all 0.3s ease; }
+    .hover\:scale-105:hover { transform: scale(1.05); }
+    .hover\:shadow-lg:hover { box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }
+
+    /* --- PROGRESS BAR ANIMADO --- */
+    .progress-bar {
+        transition: width 0.5s ease-in-out;
+    }
+
+    /* --- BADGE DE ATUALIZAÇÃO --- */
+    .update-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+        padding: 0.25rem 0.75rem;
+        border-radius: 9999px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        background-color: #dbeafe;
+        color: #1e40af;
+    }
+    .update-badge.fresh {
+        background-color: #d1fae5;
+        color: #065f46;
+    }
+    .update-badge.stale {
+        background-color: #fed7aa;
+        color: #92400e;
+    }
+
+    /* --- PULSE ANIMATION --- */
+    .pulse {
+        animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    }
+    @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: .5; }
+    }
+
+    /* --- ONBOARDING ANIMATIONS --- */
+    .animate-fadeIn {
+        animation: fadeIn 0.3s ease-in;
+    }
+
+    /* --- SLIDE DOWN ANIMATION --- */
+    @keyframes slideDown {
+        from {
+            opacity: 0;
+            transform: translateY(-100%);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    .animate-slideDown {
+        animation: slideDown 0.3s ease-out;
+    }
+
+    /* --- KEYBOARD SHORTCUT BADGE --- */
+    kbd {
+        font-family: ui-monospace, monospace;
+    }
+
+    /* --- ENHANCED TOOLTIP --- */
+    [title] {
+        position: relative;
+    }
+
+    /* --- SMOOTH SCROLL --- */
+    html {
+        scroll-behavior: smooth;
+    }
+
+    /* --- IMPROVED LOADING STATES --- */
+    .loading-shimmer {
+        background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+        background-size: 200% 100%;
+        animation: shimmer 1.5s infinite;
+    }
+
+    .dark .loading-shimmer {
+        background: linear-gradient(90deg, #1e293b 25%, #334155 50%, #1e293b 75%);
+        background-size: 200% 100%;
+    }
+
+    /* --- CONNECTION STATUS INDICATOR --- */
+    .status-indicator {
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        margin-right: 6px;
+    }
+
+    .status-online {
+        background-color: #10b981;
+        box-shadow: 0 0 8px rgba(16, 185, 129, 0.6);
+        animation: pulse 2s infinite;
+    }
+
+    .status-offline {
+        background-color: #ef4444;
+    }
+
+    /* --- BETTER FOCUS STATES --- */
+    input:focus, select:focus, button:focus-visible {
+        outline: 2px solid #3b82f6;
+        outline-offset: 2px;
+    }
+
+    /* --- ACCESSIBILITY IMPROVEMENTS --- */
+    @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+            animation-duration: 0.01ms !important;
+            animation-iteration-count: 1 !important;
+            transition-duration: 0.01ms !important;
+        }
+    }
+</style>

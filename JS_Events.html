@@ -1,0 +1,354 @@
+<script>
+    // ===================================
+    // EVENTOS E INTERAÇÃO
+    // ===================================
+    
+    // --- ALTERNAR MODO DE VISÃO ---
+    function toggleViewMode(mode) {
+        IS_DRE_MODE = (mode === 'dre');
+        // Se mudar de visão, reseta página para 1 para evitar bugs visuais
+        CURRENT_PAGE = 1; 
+        renderOverview();
+    }
+    
+    // --- PAGINAÇÃO ---
+    function changePage(direction) {
+        CURRENT_PAGE += direction;
+        
+        // Proteção contra página 0 ou negativa
+        if (CURRENT_PAGE < 1) CURRENT_PAGE = 1;
+        
+        if (CURRENT_VIEW === 'overview') renderOverview();
+        else if (CURRENT_VIEW === 'account-detail') renderAccountDetail();
+        
+        // Scroll suave até a tabela
+        const tableSection = document.querySelector('.overflow-x-auto');
+        if(tableSection) tableSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
+    // --- ATUALIZAR DADOS (REFRESH) ---
+    function refreshDashboard() {
+        if (IS_LOADING) return;
+        IS_LOADING = true;
+
+        const btn = document.getElementById('refresh-btn');
+        const icon = btn?.querySelector('i');
+        const text = btn?.querySelector('span');
+        
+        if (icon) icon.classList.add('animate-spin');
+        if (text) text.textContent = 'Atualizando...';
+        if (btn) btn.disabled = true;
+        
+        google.script.run
+            .withSuccessHandler(function(jsonTexto) {
+                try {
+                    GLOBAL_DATA = JSON.parse(jsonTexto);
+                    if (GLOBAL_DATA.lastUpdate) {
+                        LAST_UPDATE_TIME = new Date(GLOBAL_DATA.lastUpdate);
+                    }
+                    renderApp();
+                    showToast('✓ Dados atualizados com sucesso!', 'success');
+                } catch (e) { 
+                    showToast('✗ Erro ao processar dados: ' + e.message, 'error'); 
+                } finally {
+                    IS_LOADING = false;
+                    if (icon) icon.classList.remove('animate-spin');
+                    if (text) text.textContent = 'Atualizar';
+                    if (btn) btn.disabled = false;
+                }
+            })
+            .withFailureHandler(function(error) {
+                showToast('✗ Falha ao conectar: ' + error.message, 'error');
+                IS_LOADING = false;
+                if (icon) icon.classList.remove('animate-spin');
+                if (text) text.textContent = 'Atualizar';
+                if (btn) btn.disabled = false;
+            })
+            .refreshData(); // Certifique-se que essa função existe no seu Code.gs
+    }
+
+    // --- NAVEGAÇÃO ---
+    function goToDetail(id) { 
+        SELECTED_ACCOUNT = GLOBAL_DATA.accounts.find(a => a.id === id); 
+        CURRENT_VIEW = 'account-detail'; 
+        CURRENT_PAGE = 1; 
+        renderApp(); 
+    }
+
+    function goBack() { 
+        SELECTED_ACCOUNT = null; 
+        SELECTED_SUBCATEGORIES = []; 
+        TRANSACTION_SEARCH_QUERY = ''; 
+        CURRENT_VIEW = 'overview'; 
+        CURRENT_PAGE = 1; 
+        renderApp(); 
+    }
+    
+    // --- FILTROS DE SUBCATEGORIA (CLICK NO GRÁFICO) ---
+    function toggleSubcategoryFilter(subcategory) { 
+        const index = SELECTED_SUBCATEGORIES.indexOf(subcategory); 
+        if (index > -1) { SELECTED_SUBCATEGORIES.splice(index, 1); } 
+        else { SELECTED_SUBCATEGORIES.push(subcategory); } 
+        CURRENT_PAGE = 1; 
+        renderAccountDetail(); 
+    }
+
+    function clearSubcategoryFilter() { 
+        SELECTED_SUBCATEGORIES = []; 
+        CURRENT_PAGE = 1; 
+        renderAccountDetail(); 
+    }
+
+    // --- EXPORTAÇÃO ---
+    function exportToCSV(data, filename) {
+      const csvRows = [];
+      const headers = Object.keys(data[0]);
+      csvRows.push(headers.join(','));
+      for (const row of data) {
+        const values = headers.map(header => { 
+            const escaped = ('' + (row[header] || '')).replace(/"/g, '\\"'); 
+            return `"${escaped}"`; 
+        });
+        csvRows.push(values.join(','));
+      }
+      const csvString = csvRows.join('\n');
+      const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a'); link.href = url; link.download = filename; 
+      document.body.appendChild(link); link.click(); document.body.removeChild(link);
+      showToast('✓ CSV exportado com sucesso!', 'success');
+    }
+
+    async function exportToPDF() {
+        showToast('📄 Gerando relatório PDF...', 'info', 2000);
+        try {
+            const noprint = document.querySelectorAll('.no-print');
+            noprint.forEach(el => el.style.display = 'none');
+            const wasBlurred = IS_PRIVACY_MODE;
+            if (wasBlurred) togglePrivacy(); // Remove blur para imprimir
+            
+            await new Promise(resolve => setTimeout(resolve, 500)); // Aguarda render
+            window.print();
+            
+            noprint.forEach(el => el.style.display = '');
+            if (wasBlurred) togglePrivacy(); // Restaura blur
+            showToast('✓ Relatório PDF pronto! Use Ctrl+P ou Cmd+P', 'success');
+        } catch (error) { showToast('✗ Erro ao gerar PDF: ' + error.message, 'error'); }
+    }
+
+    // --- BUSCA (DEBOUNCED) & LEITURA DE FILTROS ---
+const debouncedSearch = () => {
+    clearTimeout(SEARCH_TIMEOUT);
+    SEARCH_TIMEOUT = setTimeout(() => {
+        const input = document.getElementById('transactionSearch');
+        TRANSACTION_SEARCH_QUERY = input ? input.value : '';
+        
+        const catSelect = document.getElementById('filterCategory');
+        const typeSelect = document.getElementById('filterType');
+        const statusSelect = document.getElementById('filterStatus'); // NOVO
+        const ccSelect = document.getElementById('filterCostCenter');
+        
+        if (catSelect) ADVANCED_FILTERS.category = catSelect.value;
+        if (typeSelect) ADVANCED_FILTERS.type = typeSelect.value;
+        if (statusSelect) ADVANCED_FILTERS.status = statusSelect.value; // NOVO
+        if (ccSelect) ADVANCED_FILTERS.costCenter = ccSelect.value;
+        
+        CURRENT_PAGE = 1;
+        
+        if (CURRENT_VIEW === 'overview') renderOverview(); 
+        else renderAccountDetail();
+        
+        const newInput = document.getElementById('transactionSearch');
+        if(newInput) { 
+            newInput.focus(); 
+            const val = newInput.value; 
+            newInput.value = ''; 
+            newInput.value = val; 
+        }
+    }, 400); 
+};
+
+    // --- APLICAÇÃO DE FILTROS (UNIFICADA) ---
+function applyFilters(transactions) {
+    let filtered = transactions;
+
+    // 1. Filtro de Texto
+    if (TRANSACTION_SEARCH_QUERY) {
+        const query = TRANSACTION_SEARCH_QUERY.toLowerCase();
+        filtered = filtered.filter(t => 
+            (t.description && t.description.toLowerCase().includes(query)) || 
+            (t.category && t.category.toLowerCase().includes(query)) || 
+            (t.subcategory && t.subcategory.toLowerCase().includes(query)) || 
+            (t.account && t.account.toLowerCase().includes(query)) || 
+            (t.date && formatDate(t.date).toLowerCase().includes(query))
+        );
+    }
+
+    // 2. Categoria
+    if (ADVANCED_FILTERS.category) {
+        filtered = filtered.filter(t => t.category === ADVANCED_FILTERS.category);
+    }
+    
+    // 3. Tipo (case insensitive)
+    if (ADVANCED_FILTERS.type) {
+        const typeFilter = ADVANCED_FILTERS.type.toLowerCase().trim();
+        filtered = filtered.filter(t => {
+            if (!t.type) return false;
+            return t.type.toLowerCase().trim() === typeFilter;
+        });
+    }
+    
+    // 4. Centro de Custo
+    if (ADVANCED_FILTERS.costCenter) { 
+        filtered = filtered.filter(t => t.costCenter === ADVANCED_FILTERS.costCenter);
+    }
+    
+    // 5. STATUS (NOVA LÓGICA)
+    if (ADVANCED_FILTERS.status) {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        
+        if (ADVANCED_FILTERS.status === 'Pendente') {
+            filtered = filtered.filter(t => {
+                if (!t.status) return true;
+                const s = t.status.toLowerCase().trim();
+                const isPago = s === 'pago' || s === 'concluído' || s === 'recebido';
+                return !isPago;
+            });
+        } 
+        else if (ADVANCED_FILTERS.status === 'Pago') {
+            filtered = filtered.filter(t => {
+                if (!t.status) return false;
+                const s = t.status.toLowerCase().trim();
+                return s === 'pago' || s === 'concluído' || s === 'recebido';
+            });
+        }
+        else if (ADVANCED_FILTERS.status === 'Atrasado') {
+            filtered = filtered.filter(t => {
+                const tDate = parseDate(t.date);
+                if (!t.status) return tDate < today;
+                const s = t.status.toLowerCase().trim();
+                const isPago = s === 'pago' || s === 'concluído' || s === 'recebido';
+                return !isPago && tDate < today;
+            });
+        }
+        else {
+            // Status específico da planilha
+            const statusFilter = ADVANCED_FILTERS.status.toLowerCase().trim();
+            filtered = filtered.filter(t => {
+                if (!t.status) return false;
+                return t.status.toLowerCase().trim() === statusFilter;
+            });
+        }
+    }
+    
+    // 6. Valor
+    if (ADVANCED_FILTERS.minValue !== null) {
+        filtered = filtered.filter(t => t.value >= ADVANCED_FILTERS.minValue);
+    }
+    if (ADVANCED_FILTERS.maxValue !== null) {
+        filtered = filtered.filter(t => t.value <= ADVANCED_FILTERS.maxValue);
+    }
+
+    return filtered;
+}
+
+    // --- NOVO: FUNÇÃO DE CLICK NO CARD (DRILL-DOWN) ---
+function quickFilter(type, status) {
+    // Limpa outros filtros
+    TRANSACTION_SEARCH_QUERY = '';
+    
+    ADVANCED_FILTERS = { 
+        category: '', 
+        costCenter: '', 
+        minValue: null, 
+        maxValue: null,
+        type: type,
+        status: status
+    };
+    
+    CURRENT_PAGE = 1;
+    
+    // Mostra loading antes de renderizar
+    const app = document.getElementById('app');
+    const loadingMsg = document.createElement('div');
+    loadingMsg.className = 'fixed top-4 left-1/2 transform -translate-x-1/2 bg-blue-600 text-white px-6 py-3 rounded-lg shadow-lg z-50 animate-pulse';
+    loadingMsg.innerHTML = `<i data-lucide="filter" class="w-4 h-4 inline mr-2"></i>Filtrando...`;
+    app.appendChild(loadingMsg);
+    lucide.createIcons();
+    
+    // Renderiza
+    setTimeout(() => {
+        loadingMsg.remove();
+        renderOverview();
+        
+        // Scroll até a tabela
+        setTimeout(() => {
+            const table = document.querySelector('.overflow-x-auto');
+            if(table) {
+                table.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                
+                // Efeito visual
+                table.classList.add('ring-2', 'ring-blue-500', 'transition-all');
+                setTimeout(() => table.classList.remove('ring-2', 'ring-blue-500'), 1500);
+            }
+        }, 300);
+        
+        // Toast informativo
+        const typeLabel = type === 'Entrada' ? 'receber' : 'pagar';
+        showToast(`✓ Mostrando ${status.toLowerCase()} a ${typeLabel}`, 'info', 3000);
+    }, 100);
+}
+    // ----------------------------------------------------
+
+    // --- LIMPAR FILTROS ---
+function clearAllFilters() {
+    TRANSACTION_SEARCH_QUERY = '';
+    ADVANCED_FILTERS = { 
+        category: '', 
+        type: '', 
+        costCenter: '', 
+        status: '',        // <-- Adicionado
+        minValue: null, 
+        maxValue: null 
+    };
+    CURRENT_PAGE = 1;
+    
+    if (CURRENT_VIEW === 'overview') renderOverview(); 
+    else renderAccountDetail();
+    
+    showToast('Filtros limpos', 'info', 2000);
+}
+
+    // --- DATAS E PERÍODOS ---
+    function setFilterMode(mode) {
+        FILTER_MODE = mode;
+        CURRENT_PAGE = 1;
+        const now = new Date();
+        
+        if (mode === 'custom') { renderApp(); return; }
+        
+        // Definição dos períodos
+        if (mode === 'this_week') { const day = now.getDay(); const diff = now.getDate() - day; START_DATE = new Date(now.setDate(diff)); END_DATE = new Date(now.setDate(diff + 6)); } 
+        else if (mode === 'last_week') { const day = now.getDay(); const diff = now.getDate() - day - 7; START_DATE = new Date(now.setDate(diff)); END_DATE = new Date(now.setDate(diff + 6)); }
+        else if (mode === 'this_month') { START_DATE = new Date(now.getFullYear(), now.getMonth(), 1); END_DATE = new Date(now.getFullYear(), now.getMonth() + 1, 0); } 
+        else if (mode === 'last_month') { START_DATE = new Date(now.getFullYear(), now.getMonth() - 1, 1); END_DATE = new Date(now.getFullYear(), now.getMonth(), 0); }
+        else if (mode === 'last_90') { END_DATE = new Date(); START_DATE = new Date(); START_DATE.setDate(END_DATE.getDate() - 90); }
+        else if (mode === 'this_year') { START_DATE = new Date(now.getFullYear(), 0, 1); END_DATE = new Date(now.getFullYear(), 11, 31); } 
+        else if (mode === 'last_year') { START_DATE = new Date(now.getFullYear() - 1, 0, 1); END_DATE = new Date(now.getFullYear() - 1, 11, 31); }
+        else if (mode === 'all_time') { 
+            END_DATE = new Date(); 
+            if (GLOBAL_DATA && GLOBAL_DATA.transactions.length > 0) { 
+                const sorted = [...GLOBAL_DATA.transactions].sort((a,b) => parseDate(a.date) - parseDate(b.date)); 
+                START_DATE = parseDate(sorted[0].date); 
+            } else { START_DATE = new Date(2020, 0, 1); } 
+        }
+        
+        START_DATE.setHours(0,0,0,0); END_DATE.setHours(23,59,59,999);
+        if (GLOBAL_DATA) renderApp();
+    }
+    
+    function updateCustomStartDate(val) { if(val) { START_DATE = parseDate(val); CURRENT_PAGE = 1; } }
+    function updateCustomEndDate(val) { if(val) { END_DATE = parseDate(val); CURRENT_PAGE = 1; } }
+    function applyCustomFilter() { CURRENT_PAGE = 1; renderApp(); }
+</script>

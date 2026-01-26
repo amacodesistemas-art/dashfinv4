@@ -1,0 +1,256 @@
+<script>
+    // ===================================
+    // LÓGICA DE NEGÓCIO (CÁLCULOS)
+    // ===================================
+
+    // --- 1. FUNÇÕES UTILITÁRIAS ESSENCIAIS (QUE ESTAVAM FALTANDO) ---
+
+    // Filtra transações por data (Start até End)
+    function getTransactionsByRange(txs, start, end) {
+        // Garante que as datas de comparação peguem o dia inteiro
+        const s = new Date(start); s.setHours(0,0,0,0);
+        const e = new Date(end); e.setHours(23,59,59,999);
+        
+        return txs.filter(t => {
+            const tDate = parseDate(t.date); // Usa a função global parseDate do JS_Core
+            return tDate >= s && tDate <= e;
+        });
+    }
+
+    // Calcula totais (Entrada, Saída, Saldo)
+    function calculateStats(txs) {
+        const entradas = txs.filter(t => t.type === 'Entrada').reduce((s, t) => s + t.value, 0);
+        const saidas = txs.filter(t => t.type === 'Saída').reduce((s, t) => s + t.value, 0);
+        return { entradas, saidas, saldo: entradas - saidas };
+    }
+
+    // Calcula Score de Saúde Financeira
+    function calculateFinancialHealth(currentStats, totalPatrimonio) {
+        let score = 0;
+        
+        // Critério 1: Saldo Positivo (40 pts)
+        const saldoNaoNegativo = currentStats.saldo >= 0;
+        if (saldoNaoNegativo) score += 40;
+
+        // Critério 2: Taxa de Poupança (30 pts)
+        const taxaRaw = currentStats.entradas > 0 ? (currentStats.saldo / currentStats.entradas) : 0;
+        const taxaPercent = (taxaRaw * 100).toFixed(0);
+        
+        let poupancaScore = 0;
+        if (taxaRaw >= 0.20) { score += 30; poupancaScore = 30; } 
+        else if (taxaRaw >= 0.10) { score += 15; poupancaScore = 15; } 
+        else if (taxaRaw > 0) { score += 5; poupancaScore = 5; }
+
+        // Critério 3: Patrimônio (30 pts)
+        const temPatrimonio = totalPatrimonio > 0;
+        if (temPatrimonio) score += 30;
+
+        let statusSaldo = currentStats.saldo > 0 ? "Positivo" : (currentStats.saldo === 0 ? "Neutro" : "Negativo");
+
+        return { 
+            score, 
+            details: { isGreen: saldoNaoNegativo, statusLabel: statusSaldo, taxaPercent, poupancaScore, temPatrimonio }
+        };
+    }
+
+    // Gera Insights (Texto e Dicas) - DEPRECATED - Use generateEnhancedInsights
+    function generateInsights(currentStats, lastStats, currentTxs) {
+        // Mantido para compatibilidade, mas agora delega para a versão aprimorada
+        if (typeof generateEnhancedInsights === 'function') {
+            return generateEnhancedInsights(currentStats, lastStats, currentTxs, GLOBAL_DATA.transactions);
+        }
+        
+        // Fallback caso o módulo não esteja carregado
+        const insights = [];
+        const diffSaldo = currentStats.saldo - lastStats.saldo;
+
+        if (diffSaldo > 0) {
+            insights.push({ icon: 'check-circle', color: 'green', text: `Melhoria de R$ ${diffSaldo.toLocaleString('pt-BR', {minimumFractionDigits:2})} no resultado comparado ao período anterior.` });
+        } else if (diffSaldo < 0) {
+            insights.push({ icon: 'alert-circle', color: 'orange', text: `Resultado R$ ${Math.abs(diffSaldo).toLocaleString('pt-BR', {minimumFractionDigits:2})} menor que o período anterior.` });
+        }
+
+        // Top Gasto
+        const gastos = {};
+        currentTxs.filter(t => t.type === 'Saída').forEach(t => gastos[t.category] = (gastos[t.category]||0) + t.value);
+        const topGasto = Object.entries(gastos).sort((a,b) => b[1]-a[1])[0];
+        
+        if(topGasto) {
+            insights.push({ icon: 'pie-chart', color: 'purple', text: `Maior despesa: "${topGasto[0]}" (${formatCurrency(topGasto[1])}).` });
+        }
+
+        return insights;
+    }
+
+    // --- 2. FUNÇÕES AVANÇADAS B2B (DRE, PROJEÇÃO, ETC) ---
+
+    // Calcular DRE Gerencial
+    function calculateDREData(txs) {
+        const realized = txs.filter(t => t.status === 'Pago' || t.status === 'Concluído');
+
+        const groups = {
+            'Receita': 0, 'Custo Variável': 0, 'Despesa Fixa': 0, 'Investimento': 0, 'Não Operacional': 0
+        };
+
+        realized.forEach(t => {
+            const grupo = t.dreGroup || 'Despesa Fixa'; // Default
+            if (groups.hasOwnProperty(grupo)) {
+                const val = t.type === 'Saída' ? -t.value : t.value;
+                groups[grupo] += val;
+            }
+        });
+
+        const receita = groups['Receita'];
+        const custoVar = groups['Custo Variável'];
+        const margemContrib = receita + custoVar;
+        const despFixa = groups['Despesa Fixa'];
+        const ebitda = margemContrib + despFixa;
+        const liquido = ebitda + groups['Investimento'] + groups['Não Operacional'];
+
+        return { receita, custoVar, margemContrib, despFixa, ebitda, liquido, groups };
+    }
+
+    // Calcular Inadimplência
+    function calculateOverdue(txs) {
+        const today = new Date();
+        today.setHours(0,0,0,0);
+        return txs.filter(t => {
+            const tDate = parseDate(t.date);
+            return tDate < today && t.status !== 'Pago' && t.status !== 'Concluído' && t.type === 'Entrada';
+        }).reduce((acc, t) => acc + t.value, 0);
+    }
+
+    // Fluxo de Caixa Projetado (30 dias)
+    function getCashFlowProjection(txs, currentBalance) {
+        const today = new Date();
+        today.setHours(0,0,0,0);
+        
+        const projection = [];
+        let projectionBalance = currentBalance;
+        
+        for(let i=0; i<30; i++) {
+            const d = new Date(today); 
+            d.setDate(today.getDate() + i);
+            const dateStr = d.toISOString().split('T')[0]; 
+            
+            // Soma APENAS o que NÃO está pago (Pendentes) para projetar
+            const movDia = txs.filter(t => t.date === dateStr && t.status !== 'Pago' && t.status !== 'Concluído')
+                .reduce((acc, t) => acc + (t.type==='Entrada' ? t.value : -t.value), 0);
+            
+            projectionBalance += movDia;
+            projection.push({ date: dateStr, balance: projectionBalance });
+        }
+        return projection;
+    }
+
+// 1. HISTÓRICO DE 12 MESES (estava faltando ou incompleta)
+function getLast12MonthsData() {
+    if (!GLOBAL_DATA || !GLOBAL_DATA.transactions) return [];
+    
+    const today = new Date();
+    const data = [];
+    const monthNames = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+
+    for (let i = 11; i >= 0; i--) {
+        const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
+        const monthIdx = d.getMonth();
+        const year = d.getFullYear();
+        const label = `${monthNames[monthIdx]}/${year.toString().substr(2)}`;
+        
+        const txs = GLOBAL_DATA.transactions.filter(t => {
+            const tDate = parseDate(t.date);
+            return tDate.getMonth() === monthIdx && tDate.getFullYear() === year;
+        });
+
+        const entradas = txs.filter(t => t.type === 'Entrada').reduce((acc, t) => acc + t.value, 0);
+        const saidas = txs.filter(t => t.type === 'Saída').reduce((acc, t) => acc + t.value, 0);
+        
+        data.push({ 
+            label: label, 
+            entradas: entradas, 
+            saidas: saidas, 
+            saldo: entradas - saidas 
+        });
+    }
+    return data;
+}
+    
+    // Progresso de Metas
+    function calculateGoalProgress(currentTxs) {
+        if (!GLOBAL_DATA.goals) return { gastos: [], objetivos: [] };
+
+        const gastos = [];
+        const objetivos = [];
+
+        GLOBAL_DATA.goals.forEach(meta => {
+            const valorAtual = currentTxs
+                .filter(t => t.category === meta.categoria && t.type === 'Saída')
+                .reduce((s, t) => s + t.value, 0);
+
+            const percent = (valorAtual / meta.meta) * 100;
+            let status = 'success';
+            if (percent > 100) status = 'danger'; else if (percent > 80) status = 'warning';
+
+            const item = { categoria: meta.categoria, meta: meta.meta, atual: valorAtual, restante: meta.meta - valorAtual, percent: percent, status: status };
+
+            if (meta.tipo === 'Objetivo') objetivos.push(item);
+            else gastos.push(item);
+        });
+
+        return { gastos, objetivos };
+    }
+
+// ===================================
+// 4. CÁLCULO DE CONTAS A PAGAR / RECEBER (CORRIGIDO)
+// ===================================
+
+function calculateAccountsSummary(allTxs, currentTxs) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    // Função auxiliar CASE INSENSITIVE
+    const isSaida = (t) => {
+        if (!t.type) return false;
+        return t.type.toLowerCase().trim() === 'saída';
+    };
+    
+    const isEntrada = (t) => {
+        if (!t.type) return false;
+        return t.type.toLowerCase().trim() === 'entrada';
+    };
+    
+    // Verifica se NÃO está pago (aceita Pendente, Aberto, Agendado...)
+    const isPendente = (t) => {
+        if (!t.status) return true; // Se não tem status, considera pendente
+        const status = t.status.toLowerCase().trim();
+        return status !== 'pago' && status !== 'concluído' && status !== 'recebido';
+    };
+
+    // 1. ATRASADOS (todo o histórico, antes de hoje)
+    const overduePayable = allTxs.filter(t => {
+        const tDate = parseDate(t.date);
+        return tDate < today && isPendente(t) && isSaida(t);
+    }).reduce((acc, t) => acc + t.value, 0);
+
+    const overdueReceivable = allTxs.filter(t => {
+        const tDate = parseDate(t.date);
+        return tDate < today && isPendente(t) && isEntrada(t);
+    }).reduce((acc, t) => acc + t.value, 0);
+
+    // 2. A VENCER NO PERÍODO (Respeita o filtro que o usuário escolheu)
+    const scheduledPayable = currentTxs.filter(t => 
+        isPendente(t) && isSaida(t)
+    ).reduce((acc, t) => acc + t.value, 0);
+
+    const scheduledReceivable = currentTxs.filter(t => 
+        isPendente(t) && isEntrada(t)
+    ).reduce((acc, t) => acc + t.value, 0);
+
+    return {
+        overduePayable,
+        overdueReceivable,
+        scheduledPayable,
+        scheduledReceivable
+    };
+}
+</script>

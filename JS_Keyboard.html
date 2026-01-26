@@ -1,0 +1,190 @@
+<script>
+// ===================================
+// KEYBOARD SHORTCUTS
+// ===================================
+
+let shortcutsHintVisible = false;
+
+function initKeyboardShortcuts() {
+  document.addEventListener('keydown', function(e) {
+    // Previne ações se estiver digitando em input/textarea
+    const isTyping = ['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName);
+    
+    // Ctrl+K ou Cmd+K: Focar busca
+    if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+      e.preventDefault();
+      const searchInput = document.getElementById('transactionSearch');
+      if (searchInput) {
+        searchInput.focus();
+        searchInput.select();
+        showToast('🔍 Busca ativada', 'info', 1500);
+      }
+      return;
+    }
+    
+    // Ctrl+R ou Cmd+R: Refresh (apenas se não estiver no navegador padrão)
+    if ((e.ctrlKey || e.metaKey) && e.key === 'r') {
+      if (typeof google !== 'undefined' && google.script) {
+        e.preventDefault();
+        refreshDashboard();
+      }
+      return;
+    }
+    
+    // Não continua se estiver digitando
+    if (isTyping) return;
+    
+    // D: Toggle Dark Mode
+    if (e.key === 'd' || e.key === 'D') {
+      e.preventDefault();
+      toggleDarkMode();
+      const isDark = document.documentElement.classList.contains('dark');
+      showToast(isDark ? '🌙 Modo escuro ativado' : '☀️ Modo claro ativado', 'info', 1500);
+      return;
+    }
+    
+    // P: Toggle Privacy Mode
+    if (e.key === 'p' || e.key === 'P') {
+      e.preventDefault();
+      togglePrivacy();
+      showToast(IS_PRIVACY_MODE ? '🔒 Modo privacidade ON' : '👁️ Modo privacidade OFF', 'info', 1500);
+      return;
+    }
+    
+    // Arrow Left: Página anterior
+    if (e.key === 'ArrowLeft') {
+      const prevBtn = document.querySelector('button[onclick="changePage(-1)"]');
+      if (prevBtn && !prevBtn.disabled) {
+        e.preventDefault();
+        changePage(-1);
+      }
+      return;
+    }
+    
+    // Arrow Right: Próxima página
+    if (e.key === 'ArrowRight') {
+      const nextBtn = document.querySelector('button[onclick="changePage(1)"]');
+      if (nextBtn && !nextBtn.disabled) {
+        e.preventDefault();
+        changePage(1);
+      }
+      return;
+    }
+    
+    // ?: Mostrar/ocultar dicas de atalhos
+    if (e.key === '?' && e.shiftKey) {
+      e.preventDefault();
+      toggleShortcutsHint();
+      return;
+    }
+    
+    // Esc: Fechar modals/overlays
+    if (e.key === 'Escape') {
+      const overlay = document.getElementById('onboarding-overlay');
+      if (overlay) {
+        skipOnboarding();
+      }
+      const hint = document.getElementById('shortcuts-hint');
+      if (hint) {
+        hideShortcutsHint();
+      }
+    }
+  });
+}
+
+function toggleShortcutsHint() {
+  if (shortcutsHintVisible) {
+    hideShortcutsHint();
+  } else {
+    showShortcutsHint();
+  }
+}
+
+function showShortcutsHint() {
+  // Remove hint anterior se existir
+  const existing = document.getElementById('shortcuts-hint');
+  if (existing) existing.remove();
+  
+  const hint = document.createElement('div');
+  hint.id = 'shortcuts-hint';
+  hint.className = 'fixed inset-0 z-[100] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 animate-fadeIn';
+  hint.onclick = hideShortcutsHint;
+  
+  hint.innerHTML = `
+    <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-md w-full p-8 animate-slideUp" onclick="event.stopPropagation()">
+      <div class="flex items-center justify-between mb-6">
+        <h2 class="text-2xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
+          <i data-lucide="keyboard" class="w-6 h-6 text-blue-600"></i>
+          Atalhos de Teclado
+        </h2>
+        <button onclick="hideShortcutsHint()" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+      
+      <div class="space-y-3 text-sm">
+        <div class="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-700 rounded-lg">
+          <span class="text-slate-700 dark:text-slate-300">Focar busca</span>
+          <kbd class="px-3 py-1 bg-white dark:bg-slate-600 border border-slate-300 dark:border-slate-500 rounded shadow-sm font-mono text-xs">Ctrl+K</kbd>
+        </div>
+        
+        <div class="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-700 rounded-lg">
+          <span class="text-slate-700 dark:text-slate-300">Atualizar dados</span>
+          <kbd class="px-3 py-1 bg-white dark:bg-slate-600 border border-slate-300 dark:border-slate-500 rounded shadow-sm font-mono text-xs">Ctrl+R</kbd>
+        </div>
+        
+        <div class="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-700 rounded-lg">
+          <span class="text-slate-700 dark:text-slate-300">Modo escuro</span>
+          <kbd class="px-3 py-1 bg-white dark:bg-slate-600 border border-slate-300 dark:border-slate-500 rounded shadow-sm font-mono text-xs">D</kbd>
+        </div>
+        
+        <div class="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-700 rounded-lg">
+          <span class="text-slate-700 dark:text-slate-300">Modo privacidade</span>
+          <kbd class="px-3 py-1 bg-white dark:bg-slate-600 border border-slate-300 dark:border-slate-500 rounded shadow-sm font-mono text-xs">P</kbd>
+        </div>
+        
+        <div class="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-700 rounded-lg">
+          <span class="text-slate-700 dark:text-slate-300">Navegar páginas</span>
+          <div class="flex items-center gap-1">
+            <kbd class="px-2 py-1 bg-white dark:bg-slate-600 border border-slate-300 dark:border-slate-500 rounded shadow-sm font-mono text-xs">←</kbd>
+            <kbd class="px-2 py-1 bg-white dark:bg-slate-600 border border-slate-300 dark:border-slate-500 rounded shadow-sm font-mono text-xs">→</kbd>
+          </div>
+        </div>
+        
+        <div class="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-700 rounded-lg">
+          <span class="text-slate-700 dark:text-slate-300">Mostrar atalhos</span>
+          <kbd class="px-3 py-1 bg-white dark:bg-slate-600 border border-slate-300 dark:border-slate-500 rounded shadow-sm font-mono text-xs">?</kbd>
+        </div>
+      </div>
+      
+      <div class="mt-6 pt-6 border-t border-slate-200 dark:border-slate-700 text-center">
+        <p class="text-xs text-slate-500 dark:text-slate-400">
+          Pressione <kbd class="px-2 py-0.5 bg-slate-100 dark:bg-slate-700 rounded text-[10px] font-mono">ESC</kbd> para fechar
+        </p>
+      </div>
+    </div>
+  `;
+  
+  document.body.appendChild(hint);
+  lucide.createIcons();
+  shortcutsHintVisible = true;
+}
+
+function hideShortcutsHint() {
+  const hint = document.getElementById('shortcuts-hint');
+  if (hint) {
+    hint.style.opacity = '0';
+    setTimeout(() => hint.remove(), 200);
+  }
+  shortcutsHintVisible = false;
+}
+
+// Adiciona botão de atalhos na interface
+function renderKeyboardShortcutsButton() {
+  return `
+    <button onclick="showShortcutsHint()" class="p-4 bg-slate-600 text-white rounded-full shadow-xl hover:scale-110 active:scale-95 transition-all flex items-center justify-center" title="Atalhos de Teclado (?)">
+      <i data-lucide="keyboard" class="w-6 h-6"></i>
+    </button>
+  `;
+}
+</script>

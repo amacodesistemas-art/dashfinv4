@@ -1,0 +1,1167 @@
+<script>
+    // ===================================
+    // 1. VARIÁVEIS GLOBAIS
+    // ===================================
+    let GLOBAL_DATA = null;
+    let CURRENT_VIEW = 'overview';
+    let SELECTED_ACCOUNT = null;
+    let SELECTED_SUBCATEGORIES = [];
+    let CHARTS_INSTANCES = {};
+    
+    // Configuração Inicial de Datas
+    let START_DATE = new Date(); 
+    let END_DATE = new Date();   
+    let FILTER_MODE = 'this_month';
+    
+    // Variáveis de busca e privacidade
+    let TRANSACTION_SEARCH_QUERY = ''; 
+    let SEARCH_TIMEOUT = null; 
+    let IS_PRIVACY_MODE = false;
+
+    // Controle de cache e atualização
+    let LAST_UPDATE_TIME = null;
+    let IS_LOADING = false;
+
+    // Filtros avançados
+    let ADVANCED_FILTERS = {
+        category: '',
+        type: '',
+        minValue: null,
+        maxValue: null
+    };
+
+    // ===================================
+    // 2. FUNÇÕES DE UI (Dark Mode, Toast, etc)
+    // ===================================
+    function toggleDarkMode() {
+        const html = document.documentElement;
+        const isDark = html.classList.toggle('dark');
+        const icon = document.getElementById('dark-icon');
+        icon.setAttribute('data-lucide', isDark ? 'sun' : 'moon');
+        lucide.createIcons();
+        localStorage.setItem('theme', isDark ? 'dark' : 'light');
+        renderApp();
+    }
+    if (localStorage.getItem('theme') === 'dark') { document.documentElement.classList.add('dark'); }
+
+    function togglePrivacy() {
+        IS_PRIVACY_MODE = !IS_PRIVACY_MODE;
+        const icon = document.getElementById('privacy-icon');
+        icon.setAttribute('data-lucide', IS_PRIVACY_MODE ? 'eye-off' : 'eye');
+        lucide.createIcons();
+        renderApp(); 
+    }
+
+    function printReport() { window.print(); }
+
+    function showToast(message, type = 'info', duration = 3000) {
+        const toast = document.createElement('div');
+        toast.className = `toast ${type}`;
+        toast.innerHTML = `
+            <div class="flex items-center gap-2">
+                <i data-lucide="${type === 'success' ? 'check-circle' : type === 'error' ? 'x-circle' : 'info'}" class="w-5 h-5"></i>
+                <span>${message}</span>
+            </div>
+        `;
+        document.body.appendChild(toast);
+        lucide.createIcons();
+        
+        setTimeout(() => {
+            toast.style.opacity = '0';
+            toast.style.transform = 'translateX(100%)';
+            setTimeout(() => toast.remove(), 300);
+        }, duration);
+    }
+
+    // ===================================
+    // 3. COMUNICAÇÃO COM O BACKEND (Google Script)
+    // ===================================
+    function refreshDashboard() {
+        if (IS_LOADING) return;
+        
+        IS_LOADING = true;
+        const btn = document.getElementById('refresh-btn');
+        const icon = btn?.querySelector('i');
+        const text = btn?.querySelector('span');
+        
+        if (icon) icon.classList.add('animate-spin');
+        if (text) text.textContent = 'Atualizando...';
+        if (btn) btn.disabled = true;
+        
+        google.script.run
+            .withSuccessHandler(function(jsonTexto) {
+                try {
+                    GLOBAL_DATA = JSON.parse(jsonTexto);
+                    LAST_UPDATE_TIME = new Date(GLOBAL_DATA.lastUpdate);
+                    renderApp();
+                    showToast('✓ Dados atualizados com sucesso!', 'success');
+                } catch (e) {
+                    showToast('✗ Erro ao processar dados: ' + e.message, 'error');
+                } finally {
+                    IS_LOADING = false;
+                    if (icon) icon.classList.remove('animate-spin');
+                    if (text) text.textContent = 'Atualizar';
+                    if (btn) btn.disabled = false;
+                }
+            })
+            .withFailureHandler(function(error) {
+                showToast('✗ Falha ao conectar: ' + error.message, 'error');
+                IS_LOADING = false;
+                if (icon) icon.classList.remove('animate-spin');
+                if (text) text.textContent = 'Atualizar';
+                if (btn) btn.disabled = false;
+            })
+            .refreshData();
+    }
+
+    // ===================================
+    // 4. UTILITÁRIOS E FORMATADORES
+    // ===================================
+    function getTimeSinceUpdate() {
+        if (!LAST_UPDATE_TIME) return 'Nunca';
+        
+        const diff = Date.now() - LAST_UPDATE_TIME;
+        const minutes = Math.floor(diff / 60000);
+        
+        if (minutes < 1) return 'Agora mesmo';
+        if (minutes === 1) return 'há 1 minuto';
+        if (minutes < 60) return `há ${minutes} minutos`;
+        
+        const hours = Math.floor(minutes / 60);
+        const remainingMinutes = minutes % 60;
+        
+        if (hours === 1) {
+            return remainingMinutes > 0 ? `há 1h ${remainingMinutes}m` : 'há 1 hora';
+        }
+        if (hours < 24) {
+            return remainingMinutes > 0 ? `há ${hours}h ${remainingMinutes}m` : `há ${hours} horas`;
+        }
+        
+        const days = Math.floor(hours / 24);
+        if (days === 1) return 'Ontem';
+        return `há ${days} dias`;
+    }
+    
+    // Auto-atualiza o texto do tempo a cada 60 segundos sem recarregar tudo
+    setInterval(() => {
+        const timeDisplay = document.getElementById('last-update-text');
+        if (timeDisplay) timeDisplay.textContent = 'Atualizado: ' + getTimeSinceUpdate();
+        
+        // Atualiza também a bolinha de status (Verde/Amarelo)
+        const badgeContainer = document.getElementById('update-badge-container');
+        if (badgeContainer) badgeContainer.innerHTML = getUpdateBadge();
+    }, 60000);
+
+    function getUpdateBadge() {
+        if (!LAST_UPDATE_TIME) return '';
+        const diff = Date.now() - LAST_UPDATE_TIME;
+        const minutes = Math.floor(diff / 60000);
+        if (minutes < 2) return '<span class="update-badge fresh pulse">● Atualizado</span>';
+        else if (minutes < 10) return '<span class="update-badge">● Recente</span>';
+        else return '<span class="update-badge stale">⚠ Desatualizado</span>';
+    }
+
+    const formatCurrency = (val) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
+    const parseDate = (str) => { const [y, m, d] = str.split('-'); return new Date(y, m - 1, d); }
+    const formatDate = (dateStr) => {
+        if(!dateStr) return "-";
+        try {
+            const parts = dateStr.split('-');
+            if(parts.length === 3) return new Date(parts[0], parts[1]-1, parts[2]).toLocaleDateString('pt-BR');
+            return new Date(dateStr).toLocaleDateString('pt-BR');
+        } catch(e) { return dateStr; }
+    };
+
+    // ===================================
+    // 5. LÓGICA DE FILTROS E BUSCA
+    // ===================================
+    const debouncedSearch = () => {
+        clearTimeout(SEARCH_TIMEOUT);
+        SEARCH_TIMEOUT = setTimeout(() => {
+            const input = document.getElementById('transactionSearch');
+            TRANSACTION_SEARCH_QUERY = input ? input.value : '';
+            
+            const catSelect = document.getElementById('filterCategory');
+            const typeSelect = document.getElementById('filterType');
+            const minInput = document.getElementById('filterMinValue');
+            const maxInput = document.getElementById('filterMaxValue');
+            
+            if (catSelect) ADVANCED_FILTERS.category = catSelect.value;
+            if (typeSelect) ADVANCED_FILTERS.type = typeSelect.value;
+            if (minInput) ADVANCED_FILTERS.minValue = minInput.value ? parseFloat(minInput.value) : null;
+            if (maxInput) ADVANCED_FILTERS.maxValue = maxInput.value ? parseFloat(maxInput.value) : null;
+            
+            if (CURRENT_VIEW === 'overview') renderOverview(); 
+            else renderAccountDetail();
+            
+            const newInput = document.getElementById('transactionSearch');
+            if(newInput) { 
+                newInput.focus(); 
+                const val = newInput.value; 
+                newInput.value = ''; 
+                newInput.value = val; 
+            }
+        }, 400); 
+    };
+
+    function applyFilters(transactions) {
+        let filtered = transactions;
+        if (TRANSACTION_SEARCH_QUERY) {
+            const query = TRANSACTION_SEARCH_QUERY.toLowerCase();
+            filtered = filtered.filter(t => 
+                t.description.toLowerCase().includes(query) ||
+                t.category.toLowerCase().includes(query) ||
+                t.subcategory.toLowerCase().includes(query) ||
+                t.account.toLowerCase().includes(query) ||
+                formatDate(t.date).toLowerCase().includes(query)
+            );
+        }
+        if (ADVANCED_FILTERS.category) filtered = filtered.filter(t => t.category === ADVANCED_FILTERS.category);
+        if (ADVANCED_FILTERS.type) filtered = filtered.filter(t => t.type === ADVANCED_FILTERS.type);
+        if (ADVANCED_FILTERS.minValue !== null) filtered = filtered.filter(t => t.value >= ADVANCED_FILTERS.minValue);
+        if (ADVANCED_FILTERS.maxValue !== null) filtered = filtered.filter(t => t.value <= ADVANCED_FILTERS.maxValue);
+        return filtered;
+    }
+
+    function clearAllFilters() {
+        TRANSACTION_SEARCH_QUERY = '';
+        ADVANCED_FILTERS = { category: '', type: '', minValue: null, maxValue: null };
+        const input = document.getElementById('transactionSearch');
+        if (input) input.value = '';
+        if (CURRENT_VIEW === 'overview') renderOverview();
+        else renderAccountDetail();
+        showToast('Filtros limpos', 'info', 2000);
+    }
+
+    function setFilterMode(mode) {
+        FILTER_MODE = mode;
+        const now = new Date();
+        
+        if (mode === 'custom') {
+            renderApp();
+            return;
+        }
+
+        if (mode === 'this_week') {
+            const day = now.getDay(); 
+            const diff = now.getDate() - day; 
+            START_DATE = new Date(now.setDate(diff));
+            END_DATE = new Date(now.setDate(diff + 6));
+        } 
+        else if (mode === 'last_week') {
+            const day = now.getDay();
+            const diff = now.getDate() - day - 7;
+            START_DATE = new Date(now.setDate(diff));
+            END_DATE = new Date(now.setDate(diff + 6));
+        }
+        else if (mode === 'this_month') {
+            START_DATE = new Date(now.getFullYear(), now.getMonth(), 1);
+            END_DATE = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        } 
+        else if (mode === 'last_month') {
+            START_DATE = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+            END_DATE = new Date(now.getFullYear(), now.getMonth(), 0);
+        }
+        else if (mode === 'last_90') {
+            END_DATE = new Date();
+            START_DATE = new Date();
+            START_DATE.setDate(END_DATE.getDate() - 90);
+        }
+        else if (mode === 'this_year') {
+            START_DATE = new Date(now.getFullYear(), 0, 1);
+            END_DATE = new Date(now.getFullYear(), 11, 31);
+        } 
+        else if (mode === 'last_year') {
+            START_DATE = new Date(now.getFullYear() - 1, 0, 1);
+            END_DATE = new Date(now.getFullYear() - 1, 11, 31);
+        }
+        else if (mode === 'all_time') {
+            END_DATE = new Date();
+            if (GLOBAL_DATA && GLOBAL_DATA.transactions.length > 0) {
+                const sorted = [...GLOBAL_DATA.transactions].sort((a,b) => parseDate(a.date) - parseDate(b.date));
+                START_DATE = parseDate(sorted[0].date);
+            } else {
+                START_DATE = new Date(2020, 0, 1); 
+            }
+        }
+        
+        START_DATE.setHours(0,0,0,0);
+        END_DATE.setHours(23,59,59,999);
+        
+        if (GLOBAL_DATA) renderApp();
+    }
+
+    function updateCustomStartDate(val) { if(val) START_DATE = parseDate(val); }
+    function updateCustomEndDate(val) { if(val) END_DATE = parseDate(val); }
+    function applyCustomFilter() { renderApp(); }
+
+    // ===================================
+    // 6. CÁLCULOS E LÓGICA DE NEGÓCIO
+    // ===================================
+    const getTransactionsByRange = (txs, start, end) => {
+        const s = new Date(start); s.setHours(0,0,0,0);
+        const e = new Date(end); e.setHours(23,59,59,999);
+        return txs.filter(t => {
+            const parts = t.date.split('-');
+            const tDate = new Date(parts[0], parts[1]-1, parts[2]);
+            return tDate >= s && tDate <= e;
+        });
+    };
+    
+    const calculateStats = (txs) => {
+        const entradas = txs.filter(t => t.type === 'Entrada').reduce((s, t) => s + t.value, 0);
+        const saidas = txs.filter(t => t.type === 'Saída').reduce((s, t) => s + t.value, 0);
+        return { entradas, saidas, saldo: entradas - saidas };
+    };
+
+    function calculateFinancialHealth(currentStats, totalPatrimonio) {
+        let score = 0;
+        const saldoNaoNegativo = currentStats.saldo >= 0;
+        if (saldoNaoNegativo) score += 40;
+        
+        const taxaRaw = currentStats.entradas > 0 ? (currentStats.saldo / currentStats.entradas) : 0;
+        const taxaPercent = (taxaRaw * 100).toFixed(0);
+        
+        let poupancaScore = 0;
+        if (taxaRaw >= 0.20) { score += 30; poupancaScore = 30; }
+        else if (taxaRaw >= 0.10) { score += 15; poupancaScore = 15; }
+        else if (taxaRaw > 0) { score += 5; poupancaScore = 5; }
+        
+        const temPatrimonio = totalPatrimonio > 0;
+        if (temPatrimonio) score += 30;
+        
+        let statusSaldo = "Negativo";
+        if (currentStats.saldo > 0) statusSaldo = "Positivo";
+        if (currentStats.saldo === 0) statusSaldo = "Neutro";
+        
+        return { score, details: { isGreen: saldoNaoNegativo, statusLabel: statusSaldo, taxaPercent, poupancaScore, temPatrimonio } };
+    }
+
+    function generateInsights(currentStats, lastStats, currentTxs) {
+        const insights = [];
+        const diffSaldo = currentStats.saldo - lastStats.saldo;
+        const suffix = FILTER_MODE === 'all_time' ? ' vs período anterior simulado' : ' comparado ao período anterior';
+
+        if (diffSaldo > 0) {
+            insights.push({ icon: 'check-circle', color: 'green', text: `Melhoria de R$ ${diffSaldo.toLocaleString('pt-BR', {minimumFractionDigits:2})} no resultado${suffix}.` });
+        } else if (diffSaldo < 0) {
+            insights.push({ icon: 'alert-circle', color: 'orange', text: `Resultado R$ ${Math.abs(diffSaldo).toLocaleString('pt-BR', {minimumFractionDigits:2})} menor${suffix}.` });
+        }
+        
+        const investAtual = currentTxs.filter(t => t.category.toLowerCase().includes('invest') && t.type === 'Saída').reduce((s,t) => s+t.value, 0);
+        if (investAtual > 0) {
+             insights.push({ icon: 'trending-up', color: 'blue', text: `Investimentos: ${formatCurrency(investAtual)} neste período.` });
+        }
+        
+        const gastos = {};
+        currentTxs.filter(t => t.type === 'Saída').forEach(t => gastos[t.category] = (gastos[t.category]||0) + t.value);
+        const topGasto = Object.entries(gastos).sort((a,b) => b[1]-a[1])[0];
+        if(topGasto) {
+            insights.push({ icon: 'pie-chart', color: 'purple', text: `Maior despesa: "${topGasto[0]}" (${formatCurrency(topGasto[1])}).` });
+        }
+        
+        return insights;
+    }
+
+// ===================================
+    // 1. LÓGICA DE CÁLCULO (Separa Gastos de Objetivos)
+    // ===================================
+    function calculateGoalProgress(currentTxs) {
+        if (!GLOBAL_DATA.goals || GLOBAL_DATA.goals.length === 0) return { gastos: [], objetivos: [] };
+        
+        const gastos = [];
+        const objetivos = [];
+
+        GLOBAL_DATA.goals.forEach(goal => {
+            // Verifica se é objetivo (case insensitive)
+            const isObjective = goal.tipo && goal.tipo.toLowerCase() === 'objetivo';
+            
+            // Se for Objetivo, soma ENTRADAS. Se for Gasto, soma SAÍDAS.
+            const typeFilter = isObjective ? 'Entrada' : 'Saída';
+            
+            const currentVal = currentTxs
+                .filter(t => t.category === goal.categoria && t.type === typeFilter)
+                .reduce((s, t) => s + t.value, 0);
+            
+            const percent = goal.meta > 0 ? (currentVal / goal.meta) * 100 : 0;
+            
+            let status = 'ok';
+            
+            if (isObjective) {
+                // Lógica INVERSA para objetivos: Quanto mais, melhor.
+                if (percent >= 100) status = 'success'; // Atingiu a meta
+                else if (percent < 50) status = 'warning'; // Está longe
+                else status = 'info'; // Está no caminho
+            } else {
+                // Lógica PADRÃO para gastos: Quanto mais, pior.
+                if (percent >= 100) status = 'danger'; // Estourou
+                else if (percent >= 80) status = 'warning'; // Perto do limite
+            }
+            
+            const item = {
+                categoria: goal.categoria,
+                meta: goal.meta,
+                atual: currentVal,
+                restante: goal.meta - currentVal,
+                percent: percent,
+                status: status,
+                tipo: isObjective ? 'Objetivo' : 'Gasto'
+            };
+
+            if (isObjective) {
+                objetivos.push(item);
+            } else {
+                gastos.push(item);
+            }
+        });
+        
+        // Ordena por porcentagem (maior para menor)
+        return {
+            gastos: gastos.sort((a, b) => b.percent - a.percent),
+            objetivos: objetivos.sort((a, b) => b.percent - a.percent)
+        };
+    }
+
+    function getLast12MonthsData() {
+        const now = new Date();
+        const monthsData = [];
+        
+        for(let i = 11; i >= 0; i--) {
+            const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
+            const start = new Date(date.getFullYear(), date.getMonth(), 1);
+            const end = new Date(date.getFullYear(), date.getMonth() + 1, 0);
+            
+            const txs = getTransactionsByRange(GLOBAL_DATA.transactions, start, end);
+            const stats = calculateStats(txs);
+            
+            monthsData.push({
+                label: date.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' }),
+                fullLabel: date.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }),
+                entradas: stats.entradas,
+                saidas: stats.saidas,
+                saldo: stats.saldo,
+                date: date
+            });
+        }
+        
+        return monthsData;
+    }
+
+    // ===================================
+    // 7. EXPORTAÇÃO (CSV / PDF)
+    // ===================================
+    function exportToCSV(data, filename) {
+      const csvRows = [];
+      const headers = Object.keys(data[0]);
+      csvRows.push(headers.join(','));
+      
+      for (const row of data) {
+        const values = headers.map(header => {
+          const escaped = ('' + row[header]).replace(/"/g, '\\"');
+          return `"${escaped}"`;
+        });
+        csvRows.push(values.join(','));
+      }
+      
+      const csvString = csvRows.join('\n');
+      const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      showToast('✓ CSV exportado com sucesso!', 'success');
+    }
+
+    async function exportToPDF() {
+        showToast('📄 Gerando relatório PDF...', 'info', 2000);
+        try {
+            const noprint = document.querySelectorAll('.no-print');
+            noprint.forEach(el => el.style.display = 'none');
+            const wasBlurred = IS_PRIVACY_MODE;
+            if (wasBlurred) togglePrivacy();
+            await new Promise(resolve => setTimeout(resolve, 500));
+            window.print();
+            noprint.forEach(el => el.style.display = '');
+            if (wasBlurred) togglePrivacy();
+            showToast('✓ Relatório PDF pronto! Use Ctrl+P ou Cmd+P', 'success');
+        } catch (error) {
+            showToast('✗ Erro ao gerar PDF: ' + error.message, 'error');
+        }
+    }
+
+    // ===================================
+    // 8. RENDERIZAÇÃO DE COMPONENTES
+    // ===================================
+
+    // ===================================
+    // COMPONENTE: CABEÇALHO GLOBAL
+    // ===================================
+    function renderHeader(title, subtitle = '') {
+        const totalPatrimonio = GLOBAL_DATA.accounts.reduce((s, a) => s + a.balance, 0);
+        const sensClass = IS_PRIVACY_MODE ? 'sensitive-data blur-content' : 'sensitive-data';
+
+        return `
+            <div class="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 flex flex-col md:flex-row justify-between items-center gap-4 transition-all hover:shadow-lg mb-6">
+                <div class="w-full md:w-auto">
+                    <h1 class="text-2xl font-bold text-slate-800 dark:text-white">${title}</h1>
+                    <div class="flex items-center gap-2 mt-1">
+                        <p class="text-slate-500 dark:text-slate-400 text-sm">${subtitle}</p>
+                        <div id="update-badge-container">${getUpdateBadge()}</div>
+                    </div>
+                </div>
+                
+                <div class="flex items-center gap-3 w-full md:w-auto flex-wrap justify-center md:justify-end">
+                    <button id="refresh-btn" onclick="refreshDashboard()" class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 hover:bg-blue-700 transition-all disabled:opacity-50 no-print" title="Buscar dados atualizados da planilha">
+                        <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+                        <span>Atualizar</span>
+                    </button>
+                    
+                    <button onclick="exportToPDF()" class="no-print bg-slate-800 dark:bg-slate-700 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 hover:bg-slate-900 dark:hover:bg-slate-600 transition-colors">
+                        <i data-lucide="file-text" class="w-4 h-4"></i> PDF
+                    </button>
+                    
+                    <div class="text-right border-l pl-4 border-slate-200 dark:border-slate-600">
+                        <p class="text-xs text-slate-400 font-bold uppercase">Patrimônio</p>
+                        <p class="text-2xl md:text-3xl font-bold text-slate-800 dark:text-white transition-all hover:scale-105 ${sensClass}">${formatCurrency(totalPatrimonio)}</p>
+                        <p id="last-update-text" class="text-[10px] text-slate-400 mt-0.5">Atualizado: ${getTimeSinceUpdate()}</p>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    function renderFilterBar() {
+        const inpStart = START_DATE.toISOString().split('T')[0];
+        const inpEnd = END_DATE.toISOString().split('T')[0];
+        const isCustom = FILTER_MODE === 'custom';
+        const dateDisplay = `${START_DATE.toLocaleDateString('pt-BR')} até ${END_DATE.toLocaleDateString('pt-BR')}`;
+
+        return `
+            <div class="flex flex-col gap-2 no-print">
+                <div class="flex flex-col sm:flex-row items-center gap-2 bg-slate-50 p-2 rounded-lg border border-slate-200">
+                    <select onchange="setFilterMode(this.value)" class="text-sm font-medium bg-transparent cursor-pointer focus:ring-0 outline-none text-slate-700">
+                        <option value="this_week" ${FILTER_MODE==='this_week'?'selected':''}>Essa semana</option>
+                        <option value="last_week" ${FILTER_MODE==='last_week'?'selected':''}>Semana Passada</option>
+                        <option value="this_month" ${FILTER_MODE==='this_month'?'selected':''}>Esse mês</option>
+                        <option value="last_month" ${FILTER_MODE==='last_month'?'selected':''}>Mês Passado</option>
+                        <option value="last_90" ${FILTER_MODE==='last_90'?'selected':''}>Últimos 90 dias</option>
+                        <option value="this_year" ${FILTER_MODE==='this_year'?'selected':''}>Esse ano</option>
+                        <option value="last_year" ${FILTER_MODE==='last_year'?'selected':''}>Ano passado</option>
+                        <option value="all_time" ${FILTER_MODE==='all_time'?'selected':''}>Desde o Início</option>
+                        <option value="custom" ${isCustom?'selected':''}>Personalizado</option>
+                    </select>
+                    
+                    <div class="${isCustom ? 'flex' : 'hidden'} items-center gap-2 border-l pl-2 border-slate-300 animate-fadeIn">
+                        <div class="flex flex-col">
+                            <label class="text-[8px] uppercase font-bold text-slate-400">De</label>
+                            <input type="date" value="${inpStart}" oninput="updateCustomStartDate(this.value)" class="text-xs p-1 rounded border border-slate-200 bg-white focus:border-blue-500">
+                        </div>
+                        <div class="flex flex-col">
+                            <label class="text-[8px] uppercase font-bold text-slate-400">Até</label>
+                            <input type="date" value="${inpEnd}" oninput="updateCustomEndDate(this.value)" class="text-xs p-1 rounded border border-slate-200 bg-white focus:border-blue-500">
+                        </div>
+                        <button onclick="applyCustomFilter()" class="mt-3 p-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors" title="Aplicar Datas">
+                            <i data-lucide="check" class="w-3 h-3"></i>
+                        </button>
+                    </div>
+                </div>
+                <p class="text-[10px] text-slate-400 text-center sm:text-left pl-1">
+                    Mostrando dados de: <span class="font-semibold text-slate-600">${dateDisplay}</span>
+                </p>
+            </div>
+        `;
+    }
+
+    function renderAdvancedFilters() {
+        const categories = [...new Set(GLOBAL_DATA.transactions.map(t => t.category))].sort();
+        const hasActiveFilters = TRANSACTION_SEARCH_QUERY || ADVANCED_FILTERS.category || ADVANCED_FILTERS.type || ADVANCED_FILTERS.minValue !== null || ADVANCED_FILTERS.maxValue !== null;
+        
+        return `
+            <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 no-print">
+                <div class="flex items-center justify-between mb-3">
+                    <h4 class="font-bold text-slate-700 flex items-center gap-2"><i data-lucide="filter" class="w-4 h-4"></i> Filtros Avançados</h4>
+                    ${hasActiveFilters ? `<button onclick="clearAllFilters()" class="text-xs text-red-600 hover:text-red-700 font-medium flex items-center gap-1"><i data-lucide="x" class="w-3 h-3"></i> Limpar todos</button>` : ''}
+                </div>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
+                    <div class="lg:col-span-2">
+                        <label class="text-xs text-slate-500 font-medium block mb-1">Buscar</label>
+                        <input type="text" id="transactionSearch" placeholder="Descrição, categoria..." value="${TRANSACTION_SEARCH_QUERY}" oninput="debouncedSearch()" class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
+                    </div>
+                    <div>
+                        <label class="text-xs text-slate-500 font-medium block mb-1">Categoria</label>
+                        <select id="filterCategory" onchange="debouncedSearch()" class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
+                            <option value="">Todas</option>
+                            ${categories.map(cat => `<option value="${cat}" ${ADVANCED_FILTERS.category === cat ? 'selected' : ''}>${cat}</option>`).join('')}
+                        </select>
+                    </div>
+                    <div>
+                        <label class="text-xs text-slate-500 font-medium block mb-1">Tipo</label>
+                        <select id="filterType" onchange="debouncedSearch()" class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
+                            <option value="">Todos</option>
+                            <option value="Entrada" ${ADVANCED_FILTERS.type === 'Entrada' ? 'selected' : ''}>Entrada</option>
+                            <option value="Saída" ${ADVANCED_FILTERS.type === 'Saída' ? 'selected' : ''}>Saída</option>
+                        </select>
+                    </div>
+                    <div class="flex gap-2">
+                        <div class="flex-1">
+                            <label class="text-xs text-slate-500 font-medium block mb-1">Valor Mín</label>
+                            <input type="number" id="filterMinValue" placeholder="0" value="${ADVANCED_FILTERS.minValue !== null ? ADVANCED_FILTERS.minValue : ''}" oninput="debouncedSearch()" class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
+                        </div>
+                        <div class="flex-1">
+                            <label class="text-xs text-slate-500 font-medium block mb-1">Valor Máx</label>
+                            <input type="number" id="filterMaxValue" placeholder="∞" value="${ADVANCED_FILTERS.maxValue !== null ? ADVANCED_FILTERS.maxValue : ''}" oninput="debouncedSearch()" class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
+                        </div>
+                    </div>
+                </div>
+                ${hasActiveFilters ? `<p class="text-xs text-blue-600 mt-2 flex items-center gap-1"><i data-lucide="info" class="w-3 h-3"></i> Filtros ativos - mostrando resultados filtrados</p>` : ''}
+            </div>
+        `;
+    }
+
+    // ===================================
+    // RENDERIZAÇÃO FINAL: PAINEL DE METAS (Híbrido)
+    // ===================================
+    function renderGoalsCard(currentTxs) {
+        const { gastos, objetivos } = calculateGoalProgress(currentTxs);
+
+        if (gastos.length === 0 && objetivos.length === 0) {
+            // Estado vazio
+            return `
+                <div class="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 transition-all">
+                    <h3 class="font-bold text-slate-800 dark:text-white mb-4 flex items-center gap-2">
+                        <i data-lucide="target" class="text-indigo-600 dark:text-indigo-400 w-5 h-5"></i> Metas e Objetivos
+                    </h3>
+                    <div class="text-center py-8 text-slate-400 dark:text-slate-500">
+                        <p class="text-sm">Nenhuma meta configurada na aba METAS.</p>
+                    </div>
+                </div>
+            `;
+        }
+
+        const renderItem = (g, isObj) => {
+            let colors = {};
+            
+            // --- LÓGICA DE CORES INTELIGENTE ---
+            // Light Mode: bg-COR-50 (bem clarinho), borda sutil, texto escuro.
+            // Dark Mode: dark:bg-COR-900/20 (fundo transparente), borda forte, texto claro.
+
+            if (g.status === 'danger') { 
+                colors = {
+                    container: 'border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/20',
+                    title: 'text-slate-800 dark:text-red-100',
+                    sub: 'text-red-600 dark:text-red-300',
+                    bar: 'bg-red-500',
+                    icon: 'alert-triangle',
+                    msg: 'Meta ultrapassada!'
+                };
+            } else if (g.status === 'warning') { 
+                colors = {
+                    container: 'border-yellow-200 bg-yellow-50 dark:border-yellow-700 dark:bg-yellow-900/20',
+                    title: 'text-slate-800 dark:text-yellow-100',
+                    sub: 'text-yellow-700 dark:text-yellow-300',
+                    bar: 'bg-yellow-500',
+                    icon: 'alert-circle',
+                    msg: isObj ? 'Ainda falta bastante...' : 'Próximo do limite'
+                };
+            } else if (g.status === 'success') { 
+                colors = {
+                    container: 'border-green-200 bg-green-50 dark:border-green-700 dark:bg-green-900/20',
+                    title: 'text-slate-800 dark:text-green-100',
+                    sub: 'text-green-700 dark:text-green-300',
+                    bar: 'bg-green-500',
+                    icon: 'trophy',
+                    msg: 'Objetivo alcançado! Parabéns.'
+                };
+            } else { // Info / Normal (Azul)
+                colors = {
+                    container: 'border-blue-100 bg-blue-50 dark:border-blue-800 dark:bg-blue-900/20',
+                    title: 'text-slate-800 dark:text-blue-100',
+                    sub: 'text-blue-600 dark:text-blue-300',
+                    bar: 'bg-blue-500',
+                    icon: 'check-circle',
+                    msg: isObj ? 'Em progresso...' : 'Dentro da meta'
+                };
+            }
+
+            const labelVal = `${formatCurrency(g.atual)} de ${formatCurrency(g.meta)}`;
+            
+            const labelRestante = isObj
+                ? (g.restante <= 0 ? `<span class="font-bold">✨ Concluído!</span>` : `Faltam ${formatCurrency(g.restante)}`)
+                : (g.restante >= 0 ? `Restam ${formatCurrency(g.restante)}` : `Estourou ${formatCurrency(Math.abs(g.restante))}`);
+
+            return `
+                <div class="border rounded-lg p-4 transition-all hover:shadow-md mb-3 ${colors.container}">
+                    <div class="flex justify-between items-start mb-2">
+                        <div>
+                            <h4 class="font-bold uppercase text-sm tracking-wide ${colors.title}">${g.categoria}</h4>
+                            <p class="text-xs ${colors.sub} mt-1 opacity-90 font-medium">
+                                ${labelVal} • ${labelRestante}
+                            </p>
+                        </div>
+                        <div class="text-right">
+                            <span class="text-xl font-bold ${colors.sub}">${g.percent.toFixed(0)}%</span>
+                        </div>
+                    </div>
+                    
+                    <div class="w-full bg-white/50 dark:bg-slate-700 rounded-full h-2.5 overflow-hidden border border-black/5 dark:border-white/10">
+                        <div class="h-full rounded-full transition-all duration-1000 ${colors.bar}" style="width: ${Math.min(g.percent, 100)}%"></div>
+                    </div>
+                    
+                    <p class="text-[10px] ${colors.sub} mt-2 flex items-center gap-1 font-bold">
+                        <i data-lucide="${colors.icon}" class="w-3 h-3"></i> ${colors.msg}
+                    </p>
+                </div>
+            `;
+        };
+
+        // AQUI ESTÁ A CORREÇÃO PRINCIPAL: bg-white para Light, bg-slate-800 para Dark
+        return `
+            <div class="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 transition-all hover:shadow-lg">
+                <h3 class="font-bold text-slate-800 dark:text-white mb-6 flex items-center gap-2">
+                    <i data-lucide="target" class="text-indigo-600 dark:text-indigo-400 w-5 h-5"></i> 
+                    Painel de Metas
+                </h3>
+                
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    <div>
+                        <h4 class="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase mb-3 flex items-center gap-2 border-b border-slate-100 dark:border-slate-700 pb-2">
+                            <i data-lucide="trending-down" class="w-3 h-3"></i> Limites de Gastos
+                        </h4>
+                        ${gastos.length > 0 ? gastos.map(g => renderItem(g, false)).join('') : '<p class="text-xs text-slate-400 italic py-2">Nenhum limite de gasto configurado.</p>'}
+                    </div>
+
+                    <div>
+                        <h4 class="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase mb-3 flex items-center gap-2 border-b border-slate-100 dark:border-slate-700 pb-2">
+                            <i data-lucide="piggy-bank" class="w-3 h-3"></i> Objetivos (Sonhos)
+                        </h4>
+                        ${objetivos.length > 0 ? objetivos.map(g => renderItem(g, true)).join('') : '<p class="text-xs text-slate-400 italic py-2">Nenhum objetivo configurado.</p>'}
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    function render12MonthsCard() {
+        return `
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 transition-all hover:shadow-lg">
+                <h3 class="font-bold text-slate-800 mb-4 flex items-center gap-2"><i data-lucide="bar-chart-3" class="text-indigo-600 w-5 h-5"></i> Evolução dos Últimos 12 Meses</h3>
+                <div class="h-80"><canvas id="chartMonthlyTrend"></canvas></div>
+            </div>
+        `;
+    }
+
+    // ===================================
+    // 9. RENDERIZAÇÃO DA APP
+    // ===================================
+    function renderApp() {
+        if (!GLOBAL_DATA) return;
+
+        const darkIcon = document.getElementById('dark-icon');
+        if (darkIcon) { 
+            const isDark = document.documentElement.classList.contains('dark'); 
+            darkIcon.setAttribute('data-lucide', isDark ? 'sun' : 'moon'); 
+        }
+        const privIcon = document.getElementById('privacy-icon');
+        if (privIcon) { 
+            privIcon.setAttribute('data-lucide', IS_PRIVACY_MODE ? 'eye-off' : 'eye'); 
+        }
+        
+        if (CURRENT_VIEW === 'overview') { renderOverview(); } 
+        else if (CURRENT_VIEW === 'account-detail') { renderAccountDetail(); }
+        
+        lucide.createIcons();
+    }
+
+    function renderOverview() {
+        const data = GLOBAL_DATA;
+        const currentTxs = getTransactionsByRange(data.transactions, START_DATE, END_DATE);
+        const currentStats = calculateStats(currentTxs);
+
+        const duration = END_DATE - START_DATE;
+        const prevEnd = new Date(START_DATE.getTime() - 86400000); 
+        const prevStart = new Date(prevEnd.getTime() - duration);
+        const lastTxs = getTransactionsByRange(data.transactions, prevStart, prevEnd);
+        const lastStats = calculateStats(lastTxs);
+
+        const totalPatrimonio = data.accounts.reduce((s, a) => s + a.balance, 0);
+        const health = calculateFinancialHealth(currentStats, totalPatrimonio);
+        const insights = generateInsights(currentStats, lastStats, currentTxs);
+        
+        const mediaSaldo = (currentStats.saldo + lastStats.saldo) / 2;
+        const projecao6m = totalPatrimonio + (mediaSaldo * 6);
+        const projecao12m = totalPatrimonio + (mediaSaldo * 12);
+        
+        const calcVar = (curr, prev) => prev === 0 ? 0 : ((curr - prev) / prev) * 100;
+        const varEntradas = calcVar(currentStats.entradas, lastStats.entradas);
+        const varSaidas = calcVar(currentStats.saidas, lastStats.saidas);
+        const varSaldo = calcVar(currentStats.saldo, lastStats.saldo);
+        
+        let filteredTxs = applyFilters(currentTxs);
+        let recentTransactions = [...filteredTxs].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 15);
+        
+        const emptyStateHTML = `<tr><td colspan="5" class="p-12 text-center"><div class="flex flex-col items-center justify-center text-slate-300"><i data-lucide="search-x" class="w-16 h-16 mb-4 opacity-50"></i><p class="text-lg font-medium text-slate-500">Nenhum lançamento encontrado</p><p class="text-sm">Tente ajustar os filtros ou o período.</p><button onclick="clearAllFilters()" class="mt-4 text-blue-600 hover:underline text-sm font-medium">Limpar filtros</button></div></td></tr>`;
+        const sensClass = IS_PRIVACY_MODE ? 'sensitive-data blur-content' : 'sensitive-data';
+
+        const html = `
+          <div class="fade-in space-y-6 font-sans text-slate-700 transition-all">
+            
+            ${renderHeader('Dashboard Financeiro', `Bem-vindo, ${data.config.nome_cliente}`)}
+
+            <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-100">
+                ${renderFilterBar()}
+            </div>
+
+            <div class="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-2xl shadow-lg p-6 text-white relative overflow-hidden transition-all hover:scale-[1.01]">
+                <div class="flex justify-between items-start mb-4 relative z-10"><div><h2 class="text-xl font-bold">Saúde Financeira</h2><p class="text-blue-100 text-sm opacity-80">Score calculado no período selecionado</p></div><div class="text-right"><span class="text-5xl font-bold ${health.score > 70 ? 'text-green-300' : 'text-yellow-300'}">${health.score}</span><span class="text-sm text-blue-200 block">de 100</span></div></div>
+                <div class="w-full bg-black/20 rounded-full h-2 mb-6 relative z-10"><div class="${health.score > 70 ? 'bg-green-400' : 'bg-yellow-400'} h-2 rounded-full transition-all duration-1000" style="width: ${health.score}%"></div></div>
+                <div class="grid grid-cols-3 gap-2 relative z-10 text-center">
+                    <div class="bg-white/10 rounded-lg p-2 backdrop-blur-sm border border-white/10 transition-all hover:shadow-lg"><div class="mb-1 flex justify-center">${health.details.isGreen ? '<div class="bg-green-500 rounded-full p-1"><i data-lucide="check" class="w-3 h-3 text-white"></i></div>' : '<div class="bg-red-500 rounded-full p-1"><i data-lucide="x" class="w-3 h-3 text-white"></i></div>'}</div><p class="text-xs text-blue-100 font-medium">Saldo</p><p class="text-xs font-bold text-white">${health.details.statusLabel}</p></div>
+                    <div class="bg-white/10 rounded-lg p-2 backdrop-blur-sm border border-white/10 transition-all hover:shadow-lg"><div class="mb-1 flex justify-center">${health.details.poupancaScore >= 15 ? '<div class="bg-green-500 rounded-full p-1"><i data-lucide="check" class="w-3 h-3 text-white"></i></div>' : '<div class="bg-yellow-500 rounded-full p-1"><i data-lucide="minus" class="w-3 h-3 text-white"></i></div>'}</div><p class="text-xs text-blue-100 font-medium">Poupança</p><p class="text-xs font-bold text-white">${health.details.taxaPercent}%</p></div>
+                    <div class="bg-white/10 rounded-lg p-2 backdrop-blur-sm border border-white/10 transition-all hover:shadow-lg"><div class="mb-1 flex justify-center">${health.details.temPatrimonio ? '<div class="bg-green-500 rounded-full p-1"><i data-lucide="check" class="w-3 h-3 text-white"></i></div>' : '<div class="bg-red-500 rounded-full p-1"><i data-lucide="alert-circle" class="w-3 h-3 text-white"></i></div>'}</div><p class="text-xs text-blue-100 font-medium">Acumulado</p><p class="text-xs font-bold text-white">${health.details.temPatrimonio ? 'Sim' : 'Não'}</p></div>
+                </div>
+            </div>
+
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 transition-all hover:shadow-lg">
+                <h3 class="font-bold text-slate-800 mb-4 flex items-center gap-2"><i data-lucide="lightbulb" class="text-yellow-500 w-5 h-5"></i> Análise Inteligente</h3>
+                <div class="space-y-3">${insights.length > 0 ? insights.map(insight => `<div class="p-4 ${insight.color === 'green' ? 'bg-green-50 border-green-100 text-green-800' : insight.color === 'orange' ? 'bg-orange-50 border-orange-100 text-orange-800' : insight.color === 'blue' ? 'bg-blue-50 border-blue-100 text-blue-800' : 'bg-purple-50 border-purple-100 text-purple-800'} border rounded-xl text-sm flex gap-3 items-start transition-all hover:scale-105"><i data-lucide="${insight.icon}" class="w-5 h-5 mt-0.5 shrink-0"></i><span>${insight.text}</span></div>`).join('') : '<p class="text-slate-400 text-sm">Sem dados suficientes para insights neste período.</p>'}</div>
+            </div>
+
+            ${renderGoalsCard(currentTxs)}
+
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 transition-all hover:shadow-lg">
+                <h3 class="font-bold text-slate-800 mb-4 flex items-center gap-2"><i data-lucide="target" class="text-blue-600 w-5 h-5"></i> Projeção (Se manter média atual)</h3>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div class="bg-slate-50 p-4 rounded-xl text-center transition-all hover:scale-105"><p class="text-xs text-slate-500 font-semibold uppercase">Média Saldo</p><p class="text-xl font-bold text-blue-600 ${sensClass}">${formatCurrency(mediaSaldo)}</p></div>
+                    <div class="bg-blue-50 p-4 rounded-xl text-center border border-blue-100 transition-all hover:scale-105"><p class="text-xs text-slate-500 font-semibold uppercase">Em 6 meses</p><p class="text-xl font-bold text-blue-600 ${sensClass}">${formatCurrency(projecao6m)}</p></div>
+                    <div class="bg-green-50 p-4 rounded-xl text-center border border-green-100 transition-all hover:scale-105"><p class="text-xs text-slate-500 font-semibold uppercase">Em 12 meses</p><p class="text-xl font-bold text-green-600 ${sensClass}">${formatCurrency(projecao12m)}</p></div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                 <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex justify-between items-center transition-all hover:shadow-lg"><div><p class="text-sm text-slate-500 font-medium">Entradas (Período)</p><h2 class="text-2xl font-bold text-green-600 ${sensClass}">${formatCurrency(currentStats.entradas)}</h2><div class="flex items-center gap-1 mt-1 text-xs ${varEntradas >= 0 ? 'text-green-600' : 'text-red-500'}"><i data-lucide="${varEntradas >= 0 ? 'arrow-up-right' : 'arrow-down-right'}" class="w-3 h-3"></i>${Math.abs(varEntradas).toFixed(1)}% vs anterior</div></div><div class="bg-green-100 p-3 rounded-lg text-green-600"><i data-lucide="trending-up"></i></div></div>
+                 <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex justify-between items-center transition-all hover:shadow-lg"><div><p class="text-sm text-slate-500 font-medium">Saídas (Período)</p><h2 class="text-2xl font-bold text-red-600 ${sensClass}">${formatCurrency(currentStats.saidas)}</h2><div class="flex items-center gap-1 mt-1 text-xs ${varSaidas <= 0 ? 'text-green-600' : 'text-red-500'}"><i data-lucide="${varSaidas <= 0 ? 'arrow-down-right' : 'arrow-up-right'}" class="w-3 h-3"></i>${Math.abs(varSaidas).toFixed(1)}% vs anterior</div></div><div class="bg-red-100 p-3 rounded-lg text-red-600"><i data-lucide="trending-down"></i></div></div>
+                 <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex justify-between items-center transition-all hover:shadow-lg"><div><p class="text-sm text-slate-500 font-medium">Saldo Líquido</p><h2 class="text-2xl font-bold ${currentStats.saldo >= 0 ? 'text-blue-600' : 'text-red-600'} ${sensClass}">${formatCurrency(currentStats.saldo)}</h2><div class="flex items-center gap-1 mt-1 text-xs ${varSaldo >= 0 ? 'text-green-600' : 'text-red-500'}"><i data-lucide="${varSaldo >= 0 ? 'arrow-up-right' : 'arrow-down-right'}" class="w-3 h-3"></i>${Math.abs(varSaldo).toFixed(1)}% vs anterior</div></div><div class="bg-blue-100 p-3 rounded-lg text-blue-600"><i data-lucide="wallet"></i></div></div>
+            </div>
+
+            ${render12MonthsCard()}
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 transition-all hover:shadow-lg"><h3 class="font-bold text-slate-800 mb-4">Comparativo de Períodos</h3><div class="h-64"><canvas id="chartEvolution"></canvas></div></div>
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 transition-all hover:shadow-lg"><h3 class="font-bold text-slate-800 mb-4">Gastos por Categoria</h3><div class="h-64 flex justify-center"><canvas id="chartCategory"></canvas></div></div>
+            </div>
+
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden transition-all hover:shadow-lg page-break">
+                <div class="p-6 border-b border-slate-50"><h3 class="font-bold text-slate-800">Minhas Contas <span class="text-sm font-normal text-slate-400">(Clique para detalhes)</span></h3></div>
+                <div class="divide-y divide-slate-50">
+                    ${data.accounts.map(acc => `<div onclick="goToDetail('${acc.id}')" class="p-6 flex items-center justify-between hover:bg-slate-50 cursor-pointer transition-all group hover:scale-105"><div class="flex items-center gap-4"><div class="w-10 h-10 bg-slate-100 rounded-lg flex items-center justify-center text-xl shadow-sm text-slate-600">${acc.icon}</div><div><p class="text-xs text-slate-500 font-medium">${acc.type}</p><h4 class="font-bold text-slate-800">${acc.name}</h4></div></div><div class="flex items-center gap-4"><span class="font-bold text-lg ${acc.balance >= 0 ? 'text-green-600' : 'text-red-600'} ${sensClass}">${formatCurrency(acc.balance)}</span><i data-lucide="chevron-right" class="text-slate-300 group-hover:text-blue-500 no-print"></i></div></div>`).join('')}
+                </div>
+            </div>
+
+            ${renderAdvancedFilters()}
+
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden transition-all hover:shadow-lg">
+                <div class="p-6 border-b border-slate-50 flex items-center justify-between flex-wrap gap-4">
+                    <div><h3 class="font-bold text-slate-800">Lançamentos</h3><p class="text-xs text-slate-500 mt-1">Mostrando ${recentTransactions.length} de ${filteredTxs.length} registros</p></div>
+                    <button onclick="exportToCSV(GLOBAL_DATA.transactions, 'transacoes_completas.csv')" class="no-print bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 transition-colors flex items-center gap-2"><i data-lucide="download" class="w-4 h-4"></i> Exportar CSV</button>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left">
+                        <thead class="bg-slate-50 text-slate-500 text-xs uppercase font-semibold"><tr><th class="p-4 pl-6">Data</th><th class="p-4">Categoria</th><th class="p-4">Descrição</th><th class="p-4">Conta</th><th class="p-4 pr-6 text-right">Valor</th></tr></thead>
+                        <tbody id="transactions-tbody" class="divide-y divide-slate-50 text-sm">${recentTransactions.length > 0 ? recentTransactions.map(t => `<tr class="hover:bg-slate-50 transition-colors"><td data-label="Data" class="p-4 pl-6 text-slate-500">${formatDate(t.date)}</td><td data-label="Categoria" class="p-4"><span class="px-2.5 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-600">${t.category}</span></td><td data-label="Descrição" class="p-4 text-slate-700 font-medium">${t.description}</td><td data-label="Conta" class="p-4 text-slate-500">${t.account}</td><td data-label="Valor" class="p-4 pr-6 text-right font-bold ${t.type === 'Entrada' ? 'text-green-600' : 'text-red-600'} ${sensClass}">${t.type === 'Entrada' ? '+' : '-'}${formatCurrency(t.value)}</td></tr>`).join('') : emptyStateHTML}</tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="h-8"></div>
+          </div>
+        `;
+        
+        document.getElementById('app').innerHTML = html;
+        setTimeout(() => { 
+            renderOverviewCharts(currentStats, lastStats, currentTxs);
+            render12MonthsChart();
+        }, 100);
+    }
+
+    function renderAccountDetail() {
+        const acc = SELECTED_ACCOUNT;
+        const allTxs = GLOBAL_DATA.transactions.filter(t => t.accountId === acc.id);
+        const rangeTxs = getTransactionsByRange(allTxs, START_DATE, END_DATE).sort((a, b) => new Date(b.date) - new Date(a.date));
+        
+        let txs = SELECTED_SUBCATEGORIES.length > 0 ? rangeTxs.filter(t => SELECTED_SUBCATEGORIES.includes(t.subcategory)) : rangeTxs;
+        txs = applyFilters(txs);
+        
+        const accStats = calculateStats(txs);
+        const allSubcategories = [...new Set(allTxs.map(t => t.subcategory))].sort();
+        
+        const categoryBreakdown = {};
+        txs.forEach(t => {
+            if (!categoryBreakdown[t.category]) { categoryBreakdown[t.category] = { total: 0, entradas: 0, saidas: 0, subcategorias: {} }; }
+            const cat = categoryBreakdown[t.category];
+            const valor = t.value;
+            if (t.type === 'Entrada') { cat.entradas += valor; cat.total += valor; } else { cat.saidas += valor; cat.total -= valor; }
+            if (!cat.subcategorias[t.subcategory]) { cat.subcategorias[t.subcategory] = { entradas: 0, saidas: 0, total: 0, count: 0 }; }
+            const sub = cat.subcategorias[t.subcategory];
+            sub.count++;
+            if (t.type === 'Entrada') { sub.entradas += valor; sub.total += valor; } else { sub.saidas += valor; sub.total -= valor; }
+        });
+        const sensClass = IS_PRIVACY_MODE ? 'sensitive-data blur-content' : 'sensitive-data';
+
+        const html = `
+          <div class="fade-in space-y-6 transition-all">
+            
+            <button onclick="goBack()" class="flex items-center gap-2 text-slate-500 hover:text-blue-600 font-medium mb-2 no-print transition-colors">
+                <i data-lucide="arrow-left"></i> Voltar ao Dashboard
+            </button>
+
+            ${renderHeader(acc.name, `Detalhes da conta (${acc.type})`)}
+
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 transition-all hover:shadow-lg no-print">
+                <div class="flex items-center gap-5 mb-4">
+                     <div class="w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center text-4xl transition-all hover:scale-105">${acc.icon}</div>
+                     <div>
+                        <h2 class="text-xl font-bold text-slate-700">Resumo do Período</h2>
+                        <span class="inline-block px-3 py-1 rounded-full bg-slate-100 text-slate-600 text-sm font-medium mt-1">${acc.type}</span>
+                     </div>
+                </div>
+                <div class="p-4 bg-slate-50 rounded-xl border border-slate-200">
+                    <p class="text-xs font-bold text-slate-400 uppercase mb-2">Filtro de Data</p>
+                    ${renderFilterBar()}
+                </div>
+            </div>
+
+            ${allSubcategories.length > 0 ? `<div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 transition-all hover:shadow-lg"><div class="flex items-center justify-between mb-3"><h3 class="font-bold text-slate-700 flex items-center gap-2"><i data-lucide="filter" class="w-4 h-4"></i> Filtrar por Subcategoria</h3>${SELECTED_SUBCATEGORIES.length > 0 ? `<button onclick="clearSubcategoryFilter()" class="text-xs text-blue-600 hover:text-blue-700 font-medium">Limpar filtros</button>` : ''}</div><div class="flex flex-wrap gap-2">${allSubcategories.map(sub => {const isSelected = SELECTED_SUBCATEGORIES.includes(sub); return `<button onclick="toggleSubcategoryFilter('${sub}')" class="px-3 py-1.5 rounded-lg text-sm font-medium transition-all hover:scale-105 ${isSelected ? 'bg-blue-600 text-white shadow-sm' : 'bg-white text-slate-600 border border-slate-200 hover:border-blue-300'}">${isSelected ? '✓ ' : ''}${sub}</button>`;}).join('')}</div>${SELECTED_SUBCATEGORIES.length > 0 ? `<p class="text-xs text-slate-500 mt-3">Mostrando ${txs.length} de ${rangeTxs.length} movimentações</p>` : ''}</div>` : ''}
+
+            ${renderAdvancedFilters()}
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex justify-between items-center transition-all hover:shadow-lg"><div><p class="text-sm text-slate-500">Entradas</p><p class="text-2xl font-bold text-green-600 ${sensClass}">${formatCurrency(accStats.entradas)}</p></div><div class="bg-green-50 p-3 rounded-lg"><i data-lucide="trending-up" class="text-green-600"></i></div></div>
+                <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex justify-between items-center transition-all hover:shadow-lg"><div><p class="text-sm text-slate-500">Saídas</p><p class="text-2xl font-bold text-red-600 ${sensClass}">${formatCurrency(accStats.saidas)}</p></div><div class="bg-red-50 p-3 rounded-lg"><i data-lucide="trending-down" class="text-red-600"></i></div></div>
+                <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex justify-between items-center transition-all hover:shadow-lg"><div><p class="text-sm text-slate-500">Resultado</p><p class="text-2xl font-bold ${accStats.saldo >= 0 ? 'text-blue-600' : 'text-red-600'} ${sensClass}">${formatCurrency(accStats.saldo)}</p></div><div class="bg-blue-50 p-3 rounded-lg"><i data-lucide="target" class="text-blue-600"></i></div></div>
+            </div>
+            
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6 transition-all hover:shadow-lg"><h2 class="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2"><i data-lucide="activity" class="w-5 h-5 text-blue-600"></i> Histórico de Movimentação</h2><div class="h-72"><canvas id="chartAccountTrend"></canvas></div></div>
+            
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden transition-all hover:shadow-lg">
+                <div class="p-6 border-b border-slate-50 flex items-center justify-between flex-wrap gap-4"><div><h3 class="font-bold text-slate-800">Extrato Completo</h3><p class="text-xs text-slate-500 mt-1">${txs.length} registros encontrados</p></div><button onclick="exportToCSV(txs, 'extrato_${acc.name.replace(/\s/g, '_')}.csv')" class="no-print bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors flex items-center gap-2"><i data-lucide="download"></i> CSV</button></div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead class="bg-slate-50 text-slate-500 uppercase text-xs"><tr><th class="p-4">Data</th><th class="p-4">Descrição</th><th class="p-4">Categoria</th><th class="p-4">Subcategoria</th><th class="p-4 text-right">Valor</th></tr></thead>
+                        <tbody class="divide-y divide-slate-100 text-sm text-slate-700">${txs.map(t => `<tr class="hover:bg-slate-50 transition-colors"><td data-label="Data" class="p-4 text-slate-500">${formatDate(t.date)}</td><td data-label="Descrição" class="p-4 font-medium">${t.description}</td><td data-label="Categoria" class="p-4"><span class="px-2 py-1 bg-blue-50 text-blue-600 rounded-full text-xs font-medium">${t.category}</span></td><td data-label="Subcategoria" class="p-4 text-slate-500">${t.subcategory}</td><td data-label="Valor" class="p-4 text-right font-bold ${t.type === 'Entrada' ? 'text-green-600' : 'text-slate-800'} ${sensClass}">${t.type === 'Entrada' ? '+' : '-'}${formatCurrency(t.value)}</td></tr>`).join('')}</tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="h-8"></div>
+          </div>
+        `;
+        document.getElementById('app').innerHTML = html;
+        setTimeout(() => { renderAccountChart(txs); lucide.createIcons(); }, 100);
+    }
+
+    // ===================================
+    // 10. NAVEGAÇÃO E GRÁFICOS
+    // ===================================
+    function goToDetail(id) { SELECTED_ACCOUNT = GLOBAL_DATA.accounts.find(a => a.id === id); CURRENT_VIEW = 'account-detail'; renderApp(); }
+    function goBack() { SELECTED_ACCOUNT = null; SELECTED_SUBCATEGORIES = []; TRANSACTION_SEARCH_QUERY = ''; CURRENT_VIEW = 'overview'; renderApp(); }
+    function toggleSubcategoryFilter(subcategory) { const index = SELECTED_SUBCATEGORIES.indexOf(subcategory); if (index > -1) { SELECTED_SUBCATEGORIES.splice(index, 1); } else { SELECTED_SUBCATEGORIES.push(subcategory); } renderAccountDetail(); }
+    function clearSubcategoryFilter() { SELECTED_SUBCATEGORIES = []; renderAccountDetail(); }
+    function destroyChart(id) { if(CHARTS_INSTANCES[id]) { CHARTS_INSTANCES[id].destroy(); delete CHARTS_INSTANCES[id]; } }
+    
+    function renderOverviewCharts(curr, last, currentTxs) {
+        const isDark = document.documentElement.classList.contains('dark');
+        const textColor = isDark ? '#94a3b8' : '#64748b';
+        const gridColor = isDark ? '#334155' : '#e2e8f0';
+
+        destroyChart('chartEvolution');
+        destroyChart('chartCategory');
+
+        const ctxLine = document.getElementById('chartEvolution');
+        if(ctxLine) {
+            CHARTS_INSTANCES['chartEvolution'] = new Chart(ctxLine, {
+                type: 'bar',
+                data: {
+                    labels: ['Período Anterior', 'Período Atual'],
+                    datasets: [
+                        { label: 'Entradas', data: [last.entradas, curr.entradas], backgroundColor: '#10b981' },
+                        { label: 'Saídas', data: [last.saidas, curr.saidas], backgroundColor: '#ef4444' },
+                        { label: 'Saldo', data: [last.saldo, curr.saldo], backgroundColor: '#3b82f6' }
+                    ]
+                },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { color: textColor } } }, scales: { y: { beginAtZero: true, grid: { color: gridColor }, ticks: { color: textColor } }, x: { grid: { display: false }, ticks: { color: textColor } } } }
+            });
+        }
+        
+        const catMap = {};
+        currentTxs.filter(t => t.type === 'Saída').forEach(t => catMap[t.category] = (catMap[t.category] || 0) + t.value);
+        const ctxPie = document.getElementById('chartCategory');
+        if(ctxPie) {
+            CHARTS_INSTANCES['chartCategory'] = new Chart(ctxPie, {
+                type: 'doughnut',
+                data: {
+                    labels: Object.keys(catMap),
+                    datasets: [{ data: Object.values(catMap), backgroundColor: ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#6366f1'], borderWidth: 0, hoverOffset: 10 }]
+                },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { color: textColor } }, tooltip: { callbacks: { label: c => c.label + ': ' + formatCurrency(c.parsed) } } } }
+            });
+        }
+    }
+    
+    function renderAccountChart(txs) {
+        const isDark = document.documentElement.classList.contains('dark');
+        const textColor = isDark ? '#94a3b8' : '#64748b';
+        const gridColor = isDark ? '#334155' : '#e2e8f0';
+
+        destroyChart('chartAccountTrend');
+        const sortedTxs = [...txs].sort((a, b) => new Date(a.date) - new Date(b.date));
+        const labels = [];
+        const dataPoints = [];
+        let acumulado = 0;
+        sortedTxs.forEach(t => {
+            acumulado += (t.type === 'Entrada' ? t.value : -t.value);
+            labels.push(formatDate(t.date).substring(0, 5));
+            dataPoints.push(acumulado);
+        });
+        const ctx = document.getElementById('chartAccountTrend');
+        if(ctx) {
+            CHARTS_INSTANCES['chartAccountTrend'] = new Chart(ctx, {
+                type: 'line',
+                data: { labels: labels, datasets: [{ label: 'Saldo Acumulado', data: dataPoints, borderColor: '#3b82f6', backgroundColor: 'rgba(59, 130, 246, 0.1)', fill: true, tension: 0.4 }] },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { ticks: { color: textColor, callback: v => formatCurrency(v) }, grid: { color: gridColor } }, x: { ticks: { color: textColor }, grid: { display: false } } } }
+            });
+        }
+    }
+    
+    // ===================================
+    // FUNÇÃO QUE FALTOU: RENDERIZAR O GRÁFICO DE 12 MESES
+    // ===================================
+    function render12MonthsChart() {
+        const ctx = document.getElementById('chartMonthlyTrend');
+        if (!ctx) return;
+
+        destroyChart('chartMonthlyTrend');
+
+        // Pega os dados calculados
+        const data = getLast12MonthsData(); // Essa função já existe no seu código
+        
+        // Configuração de Cores para Dark/Light Mode
+        const isDark = document.documentElement.classList.contains('dark');
+        const textColor = isDark ? '#94a3b8' : '#64748b';
+        const gridColor = isDark ? '#334155' : '#e2e8f0';
+
+        CHARTS_INSTANCES['chartMonthlyTrend'] = new Chart(ctx, {
+            type: 'bar', // Base é barra
+            data: {
+                labels: data.map(d => d.label), // Ex: Jan, Fev, Mar...
+                datasets: [
+                    {
+                        label: 'Saldo Líquido',
+                        data: data.map(d => d.saldo),
+                        type: 'line', // Transforma o saldo em LINHA
+                        borderColor: '#3b82f6', // Azul
+                        backgroundColor: '#3b82f6',
+                        borderWidth: 2,
+                        tension: 0.4,
+                        pointRadius: 3,
+                        order: 0 // Garante que a linha fique por cima
+                    },
+                    {
+                        label: 'Entradas',
+                        data: data.map(d => d.entradas),
+                        backgroundColor: '#10b981', // Verde
+                        order: 1
+                    },
+                    {
+                        label: 'Saídas',
+                        data: data.map(d => d.saidas),
+                        backgroundColor: '#ef4444', // Vermelho
+                        order: 2
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: {
+                    mode: 'index',
+                    intersect: false,
+                },
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: { color: textColor }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                let label = context.dataset.label || '';
+                                if (label) {
+                                    label += ': ';
+                                }
+                                if (context.parsed.y !== null) {
+                                    label += formatCurrency(context.parsed.y);
+                                }
+                                return label;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        grid: { display: false },
+                        ticks: { color: textColor }
+                    },
+                    y: {
+                        beginAtZero: true,
+                        grid: { color: gridColor },
+                        ticks: {
+                            color: textColor,
+                            callback: function(value) {
+                                return value.toLocaleString('pt-BR', {
+                                    style: 'currency',
+                                    currency: 'BRL',
+                                    notation: 'compact' // Deixa números grandes menores (ex: 1k)
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    // ===================================
+    // 11. INICIALIZAÇÃO
+    // ===================================
+    function init() {
+        const now = new Date();
+        START_DATE = new Date(now.getFullYear(), now.getMonth(), 1);
+        END_DATE = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        FILTER_MODE = 'this_month';
+
+        if (typeof google === 'undefined' || !google.script) {
+           document.getElementById('app').innerHTML = '<p class="text-red-500 text-center mt-10">Este painel deve ser executado no Google Apps Script.</p>';
+        } else {
+           google.script.run
+            .withSuccessHandler(function(jsonTexto) {
+               try {
+                 GLOBAL_DATA = JSON.parse(jsonTexto);
+                 if(!GLOBAL_DATA || GLOBAL_DATA.error) throw new Error("Erro nos dados");
+                 LAST_UPDATE_TIME = new Date(GLOBAL_DATA.lastUpdate);
+                 renderApp();
+               } catch (e) {
+                 document.getElementById('app').innerHTML = `<p class="text-red-500 text-center mt-10">Erro ao processar dados: ${e.message}</p>`;
+               }
+            })
+            .withFailureHandler(function(error) {
+               document.getElementById('app').innerHTML = `<p class="text-red-500 text-center mt-10">Falha ao conectar: ${error.message}</p>`;
+            })
+            .getClientData();
+        }
+    }
+    
+    init();
+</script>
