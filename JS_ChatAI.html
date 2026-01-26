@@ -1,0 +1,328 @@
+<script>
+// ===================================
+// CHATBOT DE IA FINANCEIRA
+// ===================================
+
+let chatMessages = [];
+let chatOpen = false;
+
+// Inicializa chat
+function initChat() {
+    if (!hasFeature('ai_insights')) {
+        return; // Chat apenas no plano Avançado
+    }
+    
+    // Adiciona botão de chat
+    const chatButton = document.createElement('button');
+    chatButton.id = 'chat-button';
+    chatButton.className = 'fixed bottom-6 left-6 z-50 p-4 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-full shadow-2xl hover:scale-110 active:scale-95 transition-all flex items-center justify-center group no-print';
+    chatButton.innerHTML = `
+        <i data-lucide="message-circle" class="w-6 h-6"></i>
+        <span class="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center animate-pulse">AI</span>
+    `;
+    chatButton.onclick = toggleChat;
+    
+    document.body.appendChild(chatButton);
+    lucide.createIcons();
+}
+
+// Abre/fecha chat
+function toggleChat() {
+    if (chatOpen) {
+        closeChat();
+    } else {
+        openChat();
+    }
+}
+
+// Abre chat
+function openChat() {
+    chatOpen = true;
+    
+    // Remove chat anterior se existir
+    const existing = document.getElementById('chat-container');
+    if (existing) existing.remove();
+    
+    const chatContainer = document.createElement('div');
+    chatContainer.id = 'chat-container';
+    chatContainer.className = 'fixed bottom-24 left-6 z-50 w-96 max-w-[calc(100vw-3rem)] h-[600px] max-h-[calc(100vh-8rem)] bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border-2 border-purple-200 dark:border-purple-700 flex flex-col animate-slideUp';
+    
+    chatContainer.innerHTML = `
+        <!-- Header -->
+        <div class="bg-gradient-to-r from-purple-600 to-blue-600 p-4 rounded-t-2xl flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
+                    <i data-lucide="sparkles" class="w-6 h-6 text-white"></i>
+                </div>
+                <div>
+                    <h3 class="text-white font-bold">Assistente Financeiro IA</h3>
+                    <p class="text-white/80 text-xs">Pergunte sobre suas finanças</p>
+                </div>
+            </div>
+            <button onclick="closeChat()" class="text-white/80 hover:text-white transition-colors">
+                <i data-lucide="x" class="w-5 h-5"></i>
+            </button>
+        </div>
+        
+        <!-- Messages -->
+        <div id="chat-messages" class="flex-1 overflow-y-auto p-4 space-y-4">
+            ${renderWelcomeMessage()}
+        </div>
+        
+        <!-- Input -->
+        <div class="p-4 border-t border-slate-200 dark:border-slate-700">
+            <div class="flex items-center gap-2">
+                <input 
+                    type="text" 
+                    id="chat-input" 
+                    placeholder="Pergunte algo sobre suas finanças..."
+                    class="flex-1 px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-800 dark:text-white focus:outline-none focus:border-purple-500"
+                    onkeypress="if(event.key === 'Enter') sendMessage()"
+                />
+                <button 
+                    onclick="sendMessage()" 
+                    class="p-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                >
+                    <i data-lucide="send" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <p class="text-xs text-slate-400 mt-2 text-center">A IA analisa seus dados reais do dashboard</p>
+        </div>
+    `;
+    
+    document.body.appendChild(chatContainer);
+    lucide.createIcons();
+    
+    // Foca no input
+    document.getElementById('chat-input').focus();
+    
+    // Se é primeira conversa, mostra sugestões
+    if (chatMessages.length === 0) {
+        setTimeout(() => renderSuggestions(), 500);
+    }
+}
+
+// Fecha chat
+function closeChat() {
+    chatOpen = false;
+    const container = document.getElementById('chat-container');
+    if (container) {
+        container.style.opacity = '0';
+        container.style.transform = 'translateY(20px)';
+        setTimeout(() => container.remove(), 200);
+    }
+}
+
+// Mensagem de boas-vindas
+function renderWelcomeMessage() {
+    return `
+        <div class="flex items-start gap-3 animate-fadeIn">
+            <div class="w-8 h-8 bg-purple-100 dark:bg-purple-900 rounded-full flex items-center justify-center shrink-0">
+                <i data-lucide="bot" class="w-5 h-5 text-purple-600 dark:text-purple-400"></i>
+            </div>
+            <div class="flex-1">
+                <div class="bg-slate-100 dark:bg-slate-700 rounded-2xl rounded-tl-none p-4">
+                    <p class="text-slate-800 dark:text-white text-sm">
+                        Olá! 👋 Sou seu assistente financeiro com IA. Posso ajudar você a entender suas finanças, identificar oportunidades de economia e responder suas dúvidas.
+                    </p>
+                </div>
+                <p class="text-xs text-slate-400 mt-1 ml-2">Agora</p>
+            </div>
+        </div>
+    `;
+}
+
+// Sugestões de perguntas
+function renderSuggestions() {
+    const messagesDiv = document.getElementById('chat-messages');
+    if (!messagesDiv) return;
+    
+    const suggestions = [
+        '📊 Por que meu saldo está negativo?',
+        '💰 Onde posso economizar?',
+        '📈 Qual categoria mais cresceu?',
+        '🎯 Como melhorar minha saúde financeira?'
+    ];
+    
+    const suggestionsHtml = `
+        <div class="flex flex-col gap-2 animate-fadeIn">
+            <p class="text-xs text-slate-500 dark:text-slate-400 mb-2">Sugestões de perguntas:</p>
+            ${suggestions.map(q => `
+                <button 
+                    onclick="askQuestion('${q.substring(3)}')"
+                    class="text-left p-3 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-700 rounded-lg text-sm text-slate-700 dark:text-slate-300 hover:bg-purple-100 dark:hover:bg-purple-900/30 transition-colors"
+                >
+                    ${q}
+                </button>
+            `).join('')}
+        </div>
+    `;
+    
+    messagesDiv.innerHTML += suggestionsHtml;
+    scrollToBottom();
+}
+
+// Envia mensagem
+function sendMessage() {
+    const input = document.getElementById('chat-input');
+    const message = input.value.trim();
+    
+    if (!message) return;
+    
+    // Limpa input
+    input.value = '';
+    
+    // Envia pergunta
+    askQuestion(message);
+}
+
+// Faz pergunta
+async function askQuestion(question) {
+    const messagesDiv = document.getElementById('chat-messages');
+    if (!messagesDiv) return;
+    
+    // Remove sugestões
+    const suggestions = messagesDiv.querySelector('.flex.flex-col.gap-2');
+    if (suggestions) suggestions.remove();
+    
+    // Adiciona mensagem do usuário
+    const userMessage = `
+        <div class="flex items-start gap-3 justify-end animate-fadeIn">
+            <div class="flex-1 text-right">
+                <div class="inline-block bg-purple-600 text-white rounded-2xl rounded-tr-none p-4 max-w-[80%]">
+                    <p class="text-sm">${question}</p>
+                </div>
+                <p class="text-xs text-slate-400 mt-1 mr-2">Agora</p>
+            </div>
+            <div class="w-8 h-8 bg-purple-600 rounded-full flex items-center justify-center shrink-0">
+                <i data-lucide="user" class="w-5 h-5 text-white"></i>
+            </div>
+        </div>
+    `;
+    
+    messagesDiv.innerHTML += userMessage;
+    lucide.createIcons();
+    scrollToBottom();
+    
+    // Mostra typing indicator
+    const typingId = showTyping();
+    
+    // Chama IA (via Apps Script)
+    try {
+        google.script.run
+            .withSuccessHandler(function(response) {
+                hideTyping(typingId);
+                showAIResponse(response);
+            })
+            .withFailureHandler(function(error) {
+                hideTyping(typingId);
+                showAIResponse('Desculpe, tive um problema ao processar sua pergunta. Tente novamente.');
+            })
+            .askAIFinancialQuestion(question, GLOBAL_DATA);
+    } catch (error) {
+        hideTyping(typingId);
+        showAIResponse('Erro ao conectar com a IA. Verifique sua conexão.');
+    }
+}
+
+// Mostra typing
+function showTyping() {
+    const messagesDiv = document.getElementById('chat-messages');
+    if (!messagesDiv) return null;
+    
+    const typingId = 'typing-' + Date.now();
+    const typingHtml = `
+        <div id="${typingId}" class="flex items-start gap-3 animate-fadeIn">
+            <div class="w-8 h-8 bg-purple-100 dark:bg-purple-900 rounded-full flex items-center justify-center shrink-0">
+                <i data-lucide="bot" class="w-5 h-5 text-purple-600 dark:text-purple-400"></i>
+            </div>
+            <div class="flex-1">
+                <div class="bg-slate-100 dark:bg-slate-700 rounded-2xl rounded-tl-none p-4">
+                    <div class="flex items-center gap-1">
+                        <div class="w-2 h-2 bg-slate-400 rounded-full animate-bounce"></div>
+                        <div class="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style="animation-delay: 0.1s"></div>
+                        <div class="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style="animation-delay: 0.2s"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    messagesDiv.innerHTML += typingHtml;
+    lucide.createIcons();
+    scrollToBottom();
+    
+    return typingId;
+}
+
+// Remove typing
+function hideTyping(typingId) {
+    const typing = document.getElementById(typingId);
+    if (typing) typing.remove();
+}
+
+// Mostra resposta da IA
+function showAIResponse(response) {
+    const messagesDiv = document.getElementById('chat-messages');
+    if (!messagesDiv) return;
+    
+    // Formata resposta (markdown básico)
+    const formatted = response
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\n/g, '<br>');
+    
+    const aiMessage = `
+        <div class="flex items-start gap-3 animate-fadeIn">
+            <div class="w-8 h-8 bg-purple-100 dark:bg-purple-900 rounded-full flex items-center justify-center shrink-0">
+                <i data-lucide="bot" class="w-5 h-5 text-purple-600 dark:text-purple-400"></i>
+            </div>
+            <div class="flex-1">
+                <div class="bg-slate-100 dark:bg-slate-700 rounded-2xl rounded-tl-none p-4">
+                    <p class="text-slate-800 dark:text-white text-sm leading-relaxed">${formatted}</p>
+                </div>
+                <p class="text-xs text-slate-400 mt-1 ml-2">Agora</p>
+            </div>
+        </div>
+    `;
+    
+    messagesDiv.innerHTML += aiMessage;
+    lucide.createIcons();
+    scrollToBottom();
+}
+
+// Scroll para o final
+function scrollToBottom() {
+    const messagesDiv = document.getElementById('chat-messages');
+    if (messagesDiv) {
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    }
+}
+</script>
+
+<style>
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fadeIn {
+    animation: fadeIn 0.3s ease-out;
+}
+
+#chat-messages::-webkit-scrollbar {
+    width: 6px;
+}
+
+#chat-messages::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+#chat-messages::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 3px;
+}
+
+.dark #chat-messages::-webkit-scrollbar-thumb {
+    background: #475569;
+}
+</style>
