@@ -183,4 +183,72 @@
         0%, 100% { opacity: 1; }
         50% { opacity: .5; }
     }
+
+    /* --- ONBOARDING ANIMATIONS --- */
+    .animate-fadeIn {
+        animation: fadeIn 0.3s ease-in;
+    }
+
+    /* --- KEYBOARD SHORTCUT BADGE --- */
+    kbd {
+        font-family: ui-monospace, monospace;
+    }
+
+    /* --- ENHANCED TOOLTIP --- */
+    [title] {
+        position: relative;
+    }
+
+    /* --- SMOOTH SCROLL --- */
+    html {
+        scroll-behavior: smooth;
+    }
+
+    /* --- IMPROVED LOADING STATES --- */
+    .loading-shimmer {
+        background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+        background-size: 200% 100%;
+        animation: shimmer 1.5s infinite;
+    }
+
+    .dark .loading-shimmer {
+        background: linear-gradient(90deg, #1e293b 25%, #334155 50%, #1e293b 75%);
+        background-size: 200% 100%;
+    }
+
+    /* --- CONNECTION STATUS INDICATOR --- */
+    .status-indicator {
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        margin-right: 6px;
+    }
+
+    .status-online {
+        background-color: #10b981;
+        box-shadow: 0 0 8px rgba(16, 185, 129, 0.6);
+        animation: pulse 2s infinite;
+    }
+
+    .status-offline {
+        background-color: #ef4444;
+    }
+
+    /* --- BETTER FOCUS STATES --- */
+    input:focus, select:focus, button:focus-visible {
+        outline: 2px solid #3b82f6;
+        outline-offset: 2px;
+    }
+
+    /* --- ACCESSIBILITY IMPROVEMENTS --- */
+    @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+            animation-duration: 0.01ms !important;
+            animation-iteration-count: 1 !important;
+            transition-duration: 0.01ms !important;
+        }
+    }
 </style>
