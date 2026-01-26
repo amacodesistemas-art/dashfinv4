@@ -125,6 +125,9 @@
                  GLOBAL_DATA = JSON.parse(jsonTexto);
                  if(!GLOBAL_DATA || GLOBAL_DATA.error) throw new Error("Erro nos dados");
                  
+                 // Inicializa sistema de features
+                 initFeatureFlags();
+                 
                  // Verifica validação de dados
                  if (GLOBAL_DATA.validation && !GLOBAL_DATA.validation.valid) {
                      console.warn('⚠️ Dados com problemas de validação:', GLOBAL_DATA.validation);
