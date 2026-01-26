@@ -9,17 +9,91 @@ const DataService = {
     
     const config = this.readConfig(ss);
     const accounts = this.readAccounts(ss);
-    const dreMapping = this.readDreMapping(ss); // Novo!
-    const transactions = this.readTransactions(ss, accounts, dreMapping); // Atualizado
+    const dreMapping = this.readDreMapping(ss);
+    const transactions = this.readTransactions(ss, accounts, dreMapping);
     const goals = this.readGoals(ss);
+    
+    // Validação de dados
+    const validation = this.validateData({
+      accounts: accounts,
+      transactions: transactions,
+      goals: goals
+    });
     
     return {
       config: config,
       accounts: accounts,
       transactions: transactions,
       goals: goals,
-      lastUpdate: new Date().toISOString()
+      lastUpdate: new Date().toISOString(),
+      validation: validation // Inclui relatório de validação
     };
+  },
+  
+  // Nova função: Valida todos os dados
+  validateData: function(data) {
+    const report = {
+      valid: true,
+      warnings: [],
+      errors: [],
+      stats: {
+        totalAccounts: data.accounts.length,
+        validAccounts: 0,
+        totalTransactions: data.transactions.length,
+        validTransactions: 0,
+        totalGoals: data.goals.length,
+        validGoals: 0
+      }
+    };
+    
+    // Valida contas
+    data.accounts.forEach((acc, index) => {
+      const validation = ValidationService.validate(acc, 'account');
+      if (validation.valid) {
+        report.stats.validAccounts++;
+      } else {
+        report.valid = false;
+        report.errors.push(`Conta ${index + 1} (${acc.name || 'sem nome'}): ${validation.errors.join(', ')}`);
+      }
+    });
+    
+    // Valida transações (sample de 10% para performance)
+    const sampleSize = Math.min(100, Math.ceil(data.transactions.length * 0.1));
+    const sampleTransactions = data.transactions.slice(0, sampleSize);
+    
+    sampleTransactions.forEach((tx, index) => {
+      const validation = ValidationService.validate(tx, 'transaction');
+      if (validation.valid) {
+        report.stats.validTransactions++;
+      } else {
+        report.warnings.push(`Transação linha ${index + 2}: ${validation.errors.join(', ')}`);
+      }
+    });
+    
+    // Estima total de transações válidas
+    if (sampleSize > 0) {
+      const validRatio = report.stats.validTransactions / sampleSize;
+      report.stats.validTransactions = Math.round(data.transactions.length * validRatio);
+    }
+    
+    // Valida metas
+    data.goals.forEach((goal, index) => {
+      const validation = ValidationService.validate(goal, 'goal');
+      if (validation.valid) {
+        report.stats.validGoals++;
+      } else {
+        report.warnings.push(`Meta ${index + 1} (${goal.categoria || 'sem categoria'}): ${validation.errors.join(', ')}`);
+      }
+    });
+    
+    // Se tem mais de 10 warnings, resume
+    if (report.warnings.length > 10) {
+      const extraWarnings = report.warnings.length - 10;
+      report.warnings = report.warnings.slice(0, 10);
+      report.warnings.push(`... e mais ${extraWarnings} avisos`);
+    }
+    
+    return report;
   },
 
   readConfig: function(ss) {
