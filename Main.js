@@ -186,7 +186,7 @@ function prepareEnhancedFinancialContext(transactions, stats, period, previousPe
   
   // Top 5 categorias de gasto
   var gastos = {};
-  transactions.filter(function(t) { return t.type === 'Saida'; }).forEach(function(t) {
+  transactions.filter(function(t) { return t.type === 'Saída'; }).forEach(function(t) {
     gastos[t.category] = (gastos[t.category] || 0) + t.value;
   });
   
@@ -326,7 +326,7 @@ function prepareFinancialContext(data, stats) {
   
   // Top 5 categorias de gasto
   var gastos = {};
-  transactions.filter(function(t) { return t.type === 'Saida'; }).forEach(function(t) {
+  transactions.filter(function(t) { return t.type === 'Saída'; }).forEach(function(t) {
     gastos[t.category] = (gastos[t.category] || 0) + t.value;
   });
   
