@@ -1,0 +1,873 @@
+<script>
+    // ==========================================================
+    // JS_Render.html - CAMADA DE VISUALIZAÇÃO (VIEW)
+    // ==========================================================
+
+    // ----------------------------------------------------------
+    // 1. HEADER E BARRA SUPERIOR
+    // ----------------------------------------------------------
+    function renderHeader(title, subtitle = '') {
+        const totalPatrimonio = GLOBAL_DATA.accounts.reduce((s, a) => s + a.balance, 0);
+        const sensClass = IS_PRIVACY_MODE ? 'sensitive-data blur-content' : 'sensitive-data';
+
+        return `
+            <div class="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 flex flex-col md:flex-row justify-between items-center gap-4 transition-all hover:shadow-lg mb-6">
+                <div class="w-full md:w-auto">
+                    <h1 class="text-2xl font-bold text-slate-800 dark:text-white">${title}</h1>
+                    <div class="flex items-center gap-2 mt-1">
+                        <p class="text-slate-500 dark:text-slate-400 text-sm">${subtitle}</p>
+                        <div id="update-badge-container">${getUpdateBadge()}</div>
+                    </div>
+                </div>
+                <div class="flex items-center gap-3 w-full md:w-auto flex-wrap justify-center md:justify-end">
+                    <button id="refresh-btn" onclick="refreshDashboard()" class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 hover:bg-blue-700 transition-all disabled:opacity-50 no-print" title="Buscar dados atualizados da planilha"><i data-lucide="refresh-cw" class="w-4 h-4"></i><span>Atualizar</span></button>
+                    <button onclick="exportToPDF()" class="no-print bg-slate-800 dark:bg-slate-700 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 hover:bg-slate-900 dark:hover:bg-slate-600 transition-colors"><i data-lucide="file-text" class="w-4 h-4"></i> PDF</button>
+                    <div class="text-right border-l pl-4 border-slate-200 dark:border-slate-600">
+                        <p class="text-xs text-slate-400 font-bold uppercase">Patrimônio</p>
+                        <p class="text-2xl md:text-3xl font-bold text-slate-800 dark:text-white transition-all hover:scale-105 ${sensClass}">${formatCurrency(totalPatrimonio)}</p>
+                        <p id="last-update-text" class="text-[10px] text-slate-400 mt-0.5">Atualizado: ${getTimeSinceUpdate()}</p>
+                    </div>
+                </div>
+            </div>`;
+    }
+
+    // ----------------------------------------------------------
+    // 2. FILTROS DE DATA
+    // ----------------------------------------------------------
+    function renderFilterBar() {
+        const inpStart = START_DATE.toISOString().split('T')[0];
+        const inpEnd = END_DATE.toISOString().split('T')[0];
+        const isCustom = FILTER_MODE === 'custom';
+        const dateDisplay = `${START_DATE.toLocaleDateString('pt-BR')} até ${END_DATE.toLocaleDateString('pt-BR')}`;
+        const optionClass = "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200";
+
+        return `
+            <div class="flex flex-col gap-2 no-print">
+                <div class="flex flex-col sm:flex-row items-center gap-2 bg-slate-50 dark:bg-slate-700 p-2 rounded-lg border border-slate-200 dark:border-slate-600">
+                    <select onchange="setFilterMode(this.value)" class="text-sm font-medium bg-transparent cursor-pointer focus:ring-0 outline-none text-slate-700 dark:text-white border-none">
+                        <option class="${optionClass}" value="this_week" ${FILTER_MODE === 'this_week' ? 'selected' : ''}>Essa semana</option>
+                        <option class="${optionClass}" value="last_week" ${FILTER_MODE === 'last_week' ? 'selected' : ''}>Semana Passada</option>
+                        <option class="${optionClass}" value="this_month" ${FILTER_MODE === 'this_month' ? 'selected' : ''}>Esse mês</option>
+                        <option class="${optionClass}" value="last_month" ${FILTER_MODE === 'last_month' ? 'selected' : ''}>Mês Passado</option>
+                        <option class="${optionClass}" value="last_90" ${FILTER_MODE === 'last_90' ? 'selected' : ''}>Últimos 90 dias</option>
+                        <option class="${optionClass}" value="this_year" ${FILTER_MODE === 'this_year' ? 'selected' : ''}>Esse ano</option>
+                        <option class="${optionClass}" value="last_year" ${FILTER_MODE === 'last_year' ? 'selected' : ''}>Ano passado</option>
+                        <option class="${optionClass}" value="all_time" ${FILTER_MODE === 'all_time' ? 'selected' : ''}>Desde o Início</option>
+                        <option class="${optionClass}" value="custom" ${isCustom ? 'selected' : ''}>Personalizado</option>
+                    </select>
+                    <div class="${isCustom ? 'flex' : 'hidden'} items-center gap-2 border-l pl-2 border-slate-300 dark:border-slate-500 animate-fadeIn">
+                        <div class="flex flex-col"><label class="text-[8px] uppercase font-bold text-slate-400">De</label><input type="date" value="${inpStart}" oninput="updateCustomStartDate(this.value)" class="text-xs p-1 rounded border border-slate-200 bg-white focus:border-blue-500 text-black dark:text-black"></div>
+                        <div class="flex flex-col"><label class="text-[8px] uppercase font-bold text-slate-400">Até</label><input type="date" value="${inpEnd}" oninput="updateCustomEndDate(this.value)" class="text-xs p-1 rounded border border-slate-200 bg-white focus:border-blue-500 text-black dark:text-black"></div>
+                        <button onclick="applyCustomFilter()" class="mt-3 p-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"><i data-lucide="check" class="w-3 h-3"></i></button>
+                    </div>
+                </div>
+                <p class="text-[10px] text-slate-400 text-center sm:text-left pl-1">Mostrando dados de: <span class="font-semibold text-slate-600 dark:text-slate-300">${dateDisplay}</span></p>
+            </div>`;
+    }
+
+    // ----------------------------------------------------------
+    // 3. FILTROS AVANÇADOS (Inclui Centro de Custo)
+    // ----------------------------------------------------------
+function renderAdvancedFilters() {
+    const categories = [...new Set(GLOBAL_DATA.transactions.map(t => t.category))].sort();
+    const costCenters = [...new Set(GLOBAL_DATA.transactions.map(t => t.costCenter).filter(Boolean))].sort();
+    
+    // Novo: Lista de status únicos da planilha
+    const allStatus = [...new Set(GLOBAL_DATA.transactions.map(t => t.status).filter(Boolean))].sort();
+    
+    const hasActiveFilters = TRANSACTION_SEARCH_QUERY || 
+                            ADVANCED_FILTERS.category || 
+                            ADVANCED_FILTERS.type || 
+                            ADVANCED_FILTERS.costCenter || 
+                            ADVANCED_FILTERS.status || 
+                            ADVANCED_FILTERS.minValue !== null || 
+                            ADVANCED_FILTERS.maxValue !== null;
+    
+    const optionClass = "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200";
+
+    return `
+        <div class="bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 no-print">
+            <div class="flex items-center justify-between mb-3">
+                <h4 class="font-bold text-slate-700 dark:text-white flex items-center gap-2">
+                    <i data-lucide="filter" class="w-4 h-4"></i> Filtros Avançados
+                </h4>
+                ${hasActiveFilters ? `
+                    <button onclick="clearAllFilters()" class="text-xs text-red-600 hover:text-red-700 font-medium flex items-center gap-1">
+                        <i data-lucide="x" class="w-3 h-3"></i> Limpar todos
+                    </button>
+                ` : ''}
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-3">
+                <!-- Busca -->
+                <div class="lg:col-span-2">
+                    <label class="text-xs text-slate-500 font-medium block mb-1">Buscar</label>
+                    <input type="text" 
+                           id="transactionSearch" 
+                           placeholder="Descrição, categoria, conta..." 
+                           value="${TRANSACTION_SEARCH_QUERY}" 
+                           oninput="debouncedSearch()" 
+                           class="w-full border border-slate-200 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
+                </div>
+                
+                <!-- Categoria -->
+                <div>
+                    <label class="text-xs text-slate-500 font-medium block mb-1">Categoria</label>
+                    <select id="filterCategory" onchange="debouncedSearch()" class="w-full border border-slate-200 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
+                        <option class="${optionClass}" value="">Todas</option>
+                        ${categories.map(cat => `<option class="${optionClass}" value="${cat}" ${ADVANCED_FILTERS.category === cat ? 'selected' : ''}>${cat}</option>`).join('')}
+                    </select>
+                </div>
+                
+                <!-- Tipo -->
+                <div>
+                    <label class="text-xs text-slate-500 font-medium block mb-1">Tipo</label>
+                    <select id="filterType" onchange="debouncedSearch()" class="w-full border border-slate-200 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
+                        <option class="${optionClass}" value="">Todos</option>
+                        <option class="${optionClass}" value="Entrada" ${ADVANCED_FILTERS.type === 'Entrada' ? 'selected' : ''}>Entrada</option>
+                        <option class="${optionClass}" value="Saída" ${ADVANCED_FILTERS.type === 'Saída' ? 'selected' : ''}>Saída</option>
+                    </select>
+                </div>
+                
+                <!-- NOVO: Status -->
+                <div>
+                    <label class="text-xs text-slate-500 font-medium block mb-1 flex items-center gap-1">
+                        Status
+                        <span class="text-blue-500" title="Filtre por situação de pagamento">
+                            <i data-lucide="help-circle" class="w-3 h-3"></i>
+                        </span>
+                    </label>
+                    <select id="filterStatus" onchange="debouncedSearch()" class="w-full border border-slate-200 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
+                        <option class="${optionClass}" value="">Todos</option>
+                        <option class="${optionClass}" value="Pendente" ${ADVANCED_FILTERS.status === 'Pendente' ? 'selected' : ''}>⏳ Pendente</option>
+                        <option class="${optionClass}" value="Pago" ${ADVANCED_FILTERS.status === 'Pago' ? 'selected' : ''}>✓ Pago</option>
+                        <option class="${optionClass}" value="Atrasado" ${ADVANCED_FILTERS.status === 'Atrasado' ? 'selected' : ''}>⚠️ Atrasado</option>
+                        ${allStatus.map(st => `<option class="${optionClass}" value="${st}" ${ADVANCED_FILTERS.status === st ? 'selected' : ''}>${st}</option>`).join('')}
+                    </select>
+                </div>
+                
+                <!-- Centro de Custo -->
+                <div>
+                    <label class="text-xs text-slate-500 font-medium block mb-1">Centro de Custo</label>
+                    <select id="filterCostCenter" onchange="debouncedSearch()" class="w-full border border-slate-200 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
+                        <option class="${optionClass}" value="">Todos</option>
+                        ${costCenters.map(cc => `<option class="${optionClass}" value="${cc}" ${ADVANCED_FILTERS.costCenter === cc ? 'selected' : ''}>${cc}</option>`).join('')}
+                    </select>
+                </div>
+            </div>
+            
+            ${hasActiveFilters ? `
+                <div class="mt-3 flex items-center gap-2 flex-wrap">
+                    <p class="text-xs text-blue-600 flex items-center gap-1">
+                        <i data-lucide="info" class="w-3 h-3"></i> Filtros ativos:
+                    </p>
+                    ${ADVANCED_FILTERS.type ? `<span class="px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded text-xs font-medium">${ADVANCED_FILTERS.type}</span>` : ''}
+                    ${ADVANCED_FILTERS.status ? `<span class="px-2 py-1 bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 rounded text-xs font-medium">${ADVANCED_FILTERS.status}</span>` : ''}
+                    ${ADVANCED_FILTERS.category ? `<span class="px-2 py-1 bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 rounded text-xs font-medium">${ADVANCED_FILTERS.category}</span>` : ''}
+                    ${ADVANCED_FILTERS.costCenter ? `<span class="px-2 py-1 bg-orange-100 dark:bg-orange-900 text-orange-700 dark:text-orange-300 rounded text-xs font-medium">${ADVANCED_FILTERS.costCenter}</span>` : ''}
+                </div>
+            ` : ''}
+        </div>`;
+}
+
+    // ----------------------------------------------------------
+    // 4. METAS E OBJETIVOS
+    // ----------------------------------------------------------
+    function renderGoalsCard(currentTxs) {
+        const { gastos, objetivos } = calculateGoalProgress(currentTxs);
+        if (gastos.length === 0 && objetivos.length === 0) {
+            return `<div class="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 transition-all"><h3 class="font-bold text-slate-800 dark:text-white mb-4 flex items-center gap-2"><i data-lucide="target" class="text-indigo-600 dark:text-indigo-400 w-5 h-5"></i> Metas e Objetivos</h3><div class="text-center py-8 text-slate-400 dark:text-slate-500"><p class="text-sm">Nenhuma meta configurada na aba METAS.</p></div></div>`;
+        }
+        const renderItem = (g, isObj) => {
+            let colors = {};
+            if (g.status === 'danger') { colors = { container: 'border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/20', title: 'text-slate-800 dark:text-red-100', sub: 'text-red-600 dark:text-red-300', bar: 'bg-red-500', icon: 'alert-triangle', msg: 'Meta ultrapassada!' }; }
+            else if (g.status === 'warning') { colors = { container: 'border-yellow-200 bg-yellow-50 dark:border-yellow-700 dark:bg-yellow-900/20', title: 'text-slate-800 dark:text-yellow-100', sub: 'text-yellow-700 dark:text-yellow-300', bar: 'bg-yellow-500', icon: 'alert-circle', msg: isObj ? 'Ainda falta bastante...' : 'Próximo do limite' }; }
+            else if (g.status === 'success') { colors = { container: 'border-green-200 bg-green-50 dark:border-green-700 dark:bg-green-900/20', title: 'text-slate-800 dark:text-green-100', sub: 'text-green-700 dark:text-green-300', bar: 'bg-green-500', icon: 'trophy', msg: 'Objetivo alcançado!' }; }
+            else { colors = { container: 'border-blue-100 bg-blue-50 dark:border-blue-800 dark:bg-blue-900/20', title: 'text-slate-800 dark:text-blue-100', sub: 'text-blue-600 dark:text-blue-300', bar: 'bg-blue-500', icon: 'check-circle', msg: isObj ? 'Em progresso...' : 'Dentro da meta' }; }
+
+            const labelVal = `${formatCurrency(g.atual)} de ${formatCurrency(g.meta)}`;
+            const labelRestante = isObj ? (g.restante <= 0 ? `<span class="font-bold">✨ Concluído!</span>` : `Faltam ${formatCurrency(g.restante)}`) : (g.restante >= 0 ? `Restam ${formatCurrency(g.restante)}` : `Estourou ${formatCurrency(Math.abs(g.restante))}`);
+
+            return `<div class="border rounded-lg p-4 transition-all hover:shadow-md mb-3 ${colors.container}"><div class="flex justify-between items-start mb-2"><div><h4 class="font-bold uppercase text-sm tracking-wide ${colors.title}">${g.categoria}</h4><p class="text-xs ${colors.sub} mt-1 opacity-90 font-medium">${labelVal} • ${labelRestante}</p></div><div class="text-right"><span class="text-xl font-bold ${colors.sub}">${g.percent.toFixed(0)}%</span></div></div><div class="w-full bg-white/50 dark:bg-slate-700 rounded-full h-2.5 overflow-hidden border border-black/5 dark:border-white/10"><div class="h-full rounded-full transition-all duration-1000 ${colors.bar}" style="width: ${Math.min(g.percent, 100)}%"></div></div><p class="text-[10px] ${colors.sub} mt-2 flex items-center gap-1 font-bold"><i data-lucide="${colors.icon}" class="w-3 h-3"></i> ${colors.msg}</p></div>`;
+        };
+        return `<div class="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 transition-all hover:shadow-lg"><h3 class="font-bold text-slate-800 dark:text-white mb-6 flex items-center gap-2"><i data-lucide="target" class="text-indigo-600 dark:text-indigo-400 w-5 h-5"></i> Painel de Metas</h3><div class="grid grid-cols-1 lg:grid-cols-2 gap-8"><div><h4 class="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase mb-3 flex items-center gap-2 border-b border-slate-100 dark:border-slate-700 pb-2"><i data-lucide="trending-down" class="w-3 h-3"></i> Limites de Gastos</h4>${gastos.length > 0 ? gastos.map(g => renderItem(g, false)).join('') : '<p class="text-xs text-slate-400 italic py-2">Nenhum limite de gasto configurado.</p>'}</div><div><h4 class="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase mb-3 flex items-center gap-2 border-b border-slate-100 dark:border-slate-700 pb-2"><i data-lucide="piggy-bank" class="w-3 h-3"></i> Objetivos (Sonhos)</h4>${objetivos.length > 0 ? objetivos.map(g => renderItem(g, true)).join('') : '<p class="text-xs text-slate-400 italic py-2">Nenhum objetivo configurado.</p>'}</div></div></div>`;
+    }
+
+    // ----------------------------------------------------------
+    // 5. ROTEADOR PRINCIPAL (RenderApp)
+    // ----------------------------------------------------------
+    function renderApp() {
+        if (!GLOBAL_DATA) return;
+        const darkIcon = document.getElementById('dark-icon'); if (darkIcon) { const isDark = document.documentElement.classList.contains('dark'); darkIcon.setAttribute('data-lucide', isDark ? 'sun' : 'moon'); }
+        const privIcon = document.getElementById('privacy-icon'); if (privIcon) { privIcon.setAttribute('data-lucide', IS_PRIVACY_MODE ? 'eye-off' : 'eye'); }
+        if (CURRENT_VIEW === 'overview') { renderOverview(); } else if (CURRENT_VIEW === 'account-detail') { renderAccountDetail(); }
+        lucide.createIcons();
+    }
+
+// ----------------------------------------------------------
+    // FUNÇÃO AUXILIAR: CARDS DE CONTAS A PAGAR/RECEBER
+    // ----------------------------------------------------------
+    function renderAccountsSummaryCards(summary) {
+        const sensClass = IS_PRIVACY_MODE ? 'sensitive-data blur-content' : 'sensitive-data';
+        
+        // Funçãozinha atualizada com ONCLICK
+        const cardHtml = (title, valScheduled, valOverdue, colorClass, icon, typeFilter) => `
+            <div onclick="quickFilter('${typeFilter}', 'Pendente')" class="cursor-pointer bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700 flex-1 min-w-[200px] transition-all hover:shadow-md hover:scale-[1.02] active:scale-95 group">
+                <div class="flex items-center gap-2 mb-3">
+                    <div class="p-2 rounded-lg ${colorClass.bgIcon} group-hover:brightness-95 transition-colors">
+                        <i data-lucide="${icon}" class="w-4 h-4 ${colorClass.textIcon}"></i>
+                    </div>
+                    <h4 class="font-bold text-slate-700 dark:text-white text-sm group-hover:text-blue-600 transition-colors">${title} <span class="text-[10px] text-slate-400 font-normal ml-1">(Ver detalhes)</span></h4>
+                </div>
+                
+                <div class="mb-2">
+                    <p class="text-xs text-slate-500 dark:text-slate-400">Previsto no período</p>
+                    <p class="text-xl font-bold ${colorClass.textVal} ${sensClass}">${formatCurrency(valScheduled)}</p>
+                </div>
+
+                ${valOverdue > 0 ? `
+                    <div class="pt-2 border-t border-slate-100 dark:border-slate-700 flex items-center justify-between">
+                        <span class="text-xs font-bold text-red-500 flex items-center gap-1"><i data-lucide="alert-circle" class="w-3 h-3"></i> Atrasado</span>
+                        <span class="text-xs font-bold text-red-600 dark:text-red-400 ${sensClass}">${formatCurrency(valOverdue)}</span>
+                    </div>
+                ` : `<p class="text-[10px] text-slate-400 mt-2">Nada em atraso anterior</p>`}
+            </div>
+        `;
+
+        return `
+            <div class="flex flex-col md:flex-row gap-4 mb-6">
+                ${cardHtml(
+                    'A Receber', 
+                    summary.scheduledReceivable, 
+                    summary.overdueReceivable, 
+                    { bgIcon: 'bg-blue-50 dark:bg-blue-900', textIcon: 'text-blue-600 dark:text-blue-400', textVal: 'text-blue-700 dark:text-blue-300' }, 
+                    'arrow-down-circle',
+                    'Entrada' // Passa 'Entrada' para o filtro
+                )}
+
+                ${cardHtml(
+                    'A Pagar', 
+                    summary.scheduledPayable, 
+                    summary.overduePayable, 
+                    { bgIcon: 'bg-orange-50 dark:bg-orange-900', textIcon: 'text-orange-600 dark:text-orange-400', textVal: 'text-orange-700 dark:text-orange-300' }, 
+                    'arrow-up-circle',
+                    'Saída' // Passa 'Saída' para o filtro
+                )}
+                
+                <div class="bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700 flex-1 min-w-[200px] transition-all hover:shadow-md flex flex-col justify-center">
+                    <p class="text-xs text-slate-500 dark:text-slate-400 font-bold uppercase mb-1">Balanço Previsto (Período)</p>
+                    <div class="text-2xl font-bold text-slate-800 dark:text-white ${sensClass}">
+                        ${formatCurrency(summary.scheduledReceivable - summary.scheduledPayable)}
+                    </div>
+                    <p class="text-[10px] text-slate-400 mt-1">Entradas previstas - Saídas previstas</p>
+                </div>
+            </div>
+        `;
+    }
+
+    // ----------------------------------------------------------
+    // 6. VISÃO GERAL (Dashboard Controller)
+    // ----------------------------------------------------------
+    function renderOverview() {
+        const data = GLOBAL_DATA;
+        const currentTxs = getTransactionsByRange(data.transactions, START_DATE, END_DATE);
+        const currentStats = calculateStats(currentTxs);
+        
+        // Dados período anterior para comparação
+        const duration = END_DATE - START_DATE;
+        const prevEnd = new Date(START_DATE.getTime() - 86400000); 
+        const prevStart = new Date(prevEnd.getTime() - duration);
+        const lastTxs = getTransactionsByRange(data.transactions, prevStart, prevEnd);
+        const lastStats = calculateStats(lastTxs);
+        
+        const totalPatrimonio = data.accounts.reduce((s, a) => s + a.balance, 0);
+        const health = calculateFinancialHealth(currentStats, totalPatrimonio);
+        const insights = generateInsights(currentStats, lastStats, currentTxs);
+        const sensClass = IS_PRIVACY_MODE ? 'sensitive-data blur-content' : 'sensitive-data';
+        
+        // Aplicação de filtros
+        let filteredTxs = applyFilters(currentTxs);
+        
+        // Totais dos dados filtrados
+        const totalEntradasFiltradas = filteredTxs.filter(t => t.type === 'Entrada').reduce((acc, t) => acc + t.value, 0);
+        const totalSaidasFiltradas = filteredTxs.filter(t => t.type === 'Saída').reduce((acc, t) => acc + t.value, 0);
+        const totalSaldoFiltrado = totalEntradasFiltradas - totalSaidasFiltradas;
+        
+        // B2B: Inadimplência Geral
+        const overdueValue = calculateOverdue(data.transactions);
+
+        // --- CÁLCULO PARA OS CARDS DE CONTAS A PAGAR/RECEBER ---
+        // Certifique-se que calculateAccountsSummary está no JS_Logic
+        const accountsSummary = calculateAccountsSummary(data.transactions, currentTxs);
+
+        // Paginação
+        const totalItems = filteredTxs.length;
+        const totalPages = Math.ceil(totalItems / ITEMS_PER_PAGE) || 1;
+        if (CURRENT_PAGE > totalPages) CURRENT_PAGE = totalPages;
+        
+        const startIndex = (CURRENT_PAGE - 1) * ITEMS_PER_PAGE;
+        const endIndex = startIndex + ITEMS_PER_PAGE;
+        const paginatedTxs = filteredTxs.sort((a, b) => new Date(b.date) - new Date(a.date)).slice(startIndex, endIndex);
+        const recentTransactions = paginatedTxs; 
+        
+        const showStart = totalItems > 0 ? startIndex + 1 : 0;
+        const showEnd = Math.min(endIndex, totalItems);
+
+        // Variações percentuais
+        const calcVar = (curr, prev) => prev === 0 ? 0 : ((curr - prev) / prev) * 100;
+        const varEntradas = calcVar(currentStats.entradas, lastStats.entradas);
+        const varSaidas = calcVar(currentStats.saidas, lastStats.saidas);
+        const varSaldo = calcVar(currentStats.saldo, lastStats.saldo);
+
+        const html = `
+          <div class="fade-in space-y-6 font-sans text-slate-700 transition-all">
+            ${renderHeader('Dashboard Financeiro', `Bem-vindo, ${data.config.nome_cliente}`)}
+            
+            ${overdueValue > 0 ? `
+            <div class="bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 p-4 rounded-r shadow-sm flex items-center justify-between no-print animate-pulse">
+                <div class="flex items-center gap-3">
+                    <i data-lucide="alert-octagon" class="text-red-600 dark:text-red-400"></i>
+                    <div>
+                        <p class="text-sm font-bold text-red-700 dark:text-red-300 uppercase">Atenção: Contas a Receber em Atraso</p>
+                        <p class="text-xs text-red-600 dark:text-red-400">Existem faturas vencidas não baixadas.</p>
+                    </div>
+                </div>
+                <p class="text-xl font-bold text-red-700 dark:text-red-300">${formatCurrency(overdueValue)}</p>
+            </div>` : ''}
+
+            <div class="flex flex-col md:flex-row justify-between items-center gap-4 bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700">
+                ${renderFilterBar()}
+                <div class="flex items-center bg-slate-100 dark:bg-slate-700 p-1 rounded-lg">
+                    <button onclick="toggleViewMode('cash')" class="px-3 py-1.5 rounded-md text-sm font-bold transition-all ${!IS_DRE_MODE ? 'bg-white dark:bg-slate-600 shadow text-blue-600 dark:text-white' : 'text-slate-500 hover:text-slate-700'}">Caixa</button>
+                    <button onclick="toggleViewMode('dre')" class="px-3 py-1.5 rounded-md text-sm font-bold transition-all ${IS_DRE_MODE ? 'bg-white dark:bg-slate-600 shadow text-blue-600 dark:text-white' : 'text-slate-500 hover:text-slate-700'}">DRE Gerencial</button>
+                </div>
+            </div>
+
+            ${!IS_DRE_MODE ? renderAccountsSummaryCards(accountsSummary) : ''}
+
+            ${IS_DRE_MODE ? renderDRETable(filteredTxs) : renderCashFlowDashboard(currentStats, lastStats, currentTxs, health, insights, filteredTxs, recentTransactions, paginatedTxs, varEntradas, varSaidas, varSaldo, totalEntradasFiltradas, totalSaidasFiltradas, totalSaldoFiltrado, totalItems, showStart, showEnd, totalPages)}
+            
+            <div class="h-8"></div>
+          </div>`;
+          
+        document.getElementById('app').innerHTML = html;
+        
+        // Inicialização de Gráficos e Ícones (Somente se não for DRE)
+        setTimeout(() => { 
+            if(!IS_DRE_MODE) {
+                renderOverviewCharts(currentStats, lastStats, currentTxs); 
+                render12MonthsChart();
+                renderProjectionChart(data.transactions, totalPatrimonio); 
+            }
+            lucide.createIcons();
+        }, 100);
+    }
+
+    // ----------------------------------------------------------
+    // 7. FUNÇÃO AUXILIAR: DASHBOARD DE CAIXA (PADRÃO)
+    // ----------------------------------------------------------
+function renderCashFlowDashboard(currentStats, lastStats, currentTxs, health, insights, filteredTxs, paginatedTxs, rawPaginatedTxs, varEntradas, varSaidas, varSaldo, totalEntradasFiltradas, totalSaidasFiltradas, totalSaldoFiltrado, totalItems, showStart, showEnd, totalPages) {
+    const sensClass = IS_PRIVACY_MODE ? 'sensitive-data blur-content' : 'sensitive-data';
+    
+    // Estado vazio
+    const emptyStateHTML = `
+        <tr>
+            <td colspan="6" class="p-12 text-center">
+                <div class="flex flex-col items-center justify-center text-slate-300 dark:text-slate-600">
+                    <i data-lucide="search-x" class="w-16 h-16 mb-4 opacity-50"></i>
+                    <p class="text-lg font-medium text-slate-500 dark:text-slate-400">Nenhum lançamento encontrado</p>
+                    <p class="text-sm">Tente ajustar os filtros ou o período.</p>
+                    <button onclick="clearAllFilters()" class="mt-4 text-blue-600 hover:underline text-sm font-medium">Limpar filtros</button>
+                </div>
+            </td>
+        </tr>
+    `;
+    
+    // Gera as linhas da tabela com badges de status
+    const tableRows = paginatedTxs.length > 0 ? paginatedTxs.map(t => {
+        const visualStatus = getTransactionVisualStatus(t);
+        
+        return `
+            <tr class="hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors ${visualStatus.rowClass}">
+                <td data-label="Data" class="p-4 pl-6 text-slate-500 dark:text-slate-400">
+                    ${formatDate(t.date)}
+                </td>
+                
+                <td data-label="Status" class="p-4">
+                    <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold border ${visualStatus.bgClass} ${visualStatus.textClass} ${visualStatus.borderClass}">
+                        <i data-lucide="${visualStatus.icon}" class="w-3 h-3"></i>
+                        ${visualStatus.label}
+                    </span>
+                </td>
+                
+                <td data-label="Categoria" class="p-4">
+                    <span class="px-2.5 py-1 rounded-full text-xs font-bold bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-300">
+                        ${t.category}
+                    </span>
+                </td>
+                
+                <td data-label="Descrição" class="p-4 text-slate-700 dark:text-slate-300 font-medium">
+                    ${t.description}
+                </td>
+                
+                <td data-label="Conta" class="p-4 text-slate-500 dark:text-slate-400">
+                    ${t.account}
+                </td>
+                
+                <td data-label="Valor" class="p-4 pr-6 text-right font-bold ${t.type === 'Entrada' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'} ${sensClass}">
+                    ${t.type === 'Entrada' ? '+' : '-'}${formatCurrency(t.value)}
+                </td>
+            </tr>
+        `;
+    }).join('') : emptyStateHTML;
+
+    return `
+        <div class="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-2xl shadow-lg p-6 text-white relative overflow-hidden transition-all hover:scale-[1.01]">
+            <div class="flex justify-between items-start mb-4 relative z-10">
+                <div>
+                    <h2 class="text-xl font-bold">Saúde Financeira</h2>
+                    <p class="text-blue-100 text-sm opacity-80">Score calculado no período</p>
+                </div>
+                <div class="text-right">
+                    <span class="text-5xl font-bold ${health.score > 70 ? 'text-green-300' : 'text-yellow-300'}">${health.score}</span>
+                    <span class="text-sm text-blue-200 block">de 100</span>
+                </div>
+            </div>
+            <div class="w-full bg-black/20 rounded-full h-2 mb-6 relative z-10">
+                <div class="${health.score > 70 ? 'bg-green-400' : 'bg-yellow-400'} h-2 rounded-full transition-all duration-1000" style="width: ${health.score}%"></div>
+            </div>
+            <div class="grid grid-cols-3 gap-2 relative z-10 text-center">
+                <div class="bg-white/10 rounded-lg p-2 backdrop-blur-sm border border-white/10">
+                    <div class="mb-1 flex justify-center">
+                        ${health.details.isGreen ? '<div class="bg-green-500 rounded-full p-1"><i data-lucide="check" class="w-3 h-3 text-white"></i></div>' : '<div class="bg-red-500 rounded-full p-1"><i data-lucide="x" class="w-3 h-3 text-white"></i></div>'}
+                    </div>
+                    <p class="text-xs text-blue-100 font-medium">Saldo</p>
+                    <p class="text-xs font-bold text-white">${health.details.statusLabel}</p>
+                </div>
+                <div class="bg-white/10 rounded-lg p-2 backdrop-blur-sm border border-white/10">
+                    <div class="mb-1 flex justify-center">
+                        ${health.details.poupancaScore >= 15 ? '<div class="bg-green-500 rounded-full p-1"><i data-lucide="check" class="w-3 h-3 text-white"></i></div>' : '<div class="bg-yellow-500 rounded-full p-1"><i data-lucide="minus" class="w-3 h-3 text-white"></i></div>'}
+                    </div>
+                    <p class="text-xs text-blue-100 font-medium">Poupança</p>
+                    <p class="text-xs font-bold text-white">${health.details.taxaPercent}%</p>
+                </div>
+                <div class="bg-white/10 rounded-lg p-2 backdrop-blur-sm border border-white/10">
+                    <div class="mb-1 flex justify-center">
+                        ${health.details.temPatrimonio ? '<div class="bg-green-500 rounded-full p-1"><i data-lucide="check" class="w-3 h-3 text-white"></i></div>' : '<div class="bg-red-500 rounded-full p-1"><i data-lucide="alert-circle" class="w-3 h-3 text-white"></i></div>'}
+                    </div>
+                    <p class="text-xs text-blue-100 font-medium">Acumulado</p>
+                    <p class="text-xs font-bold text-white">${health.details.temPatrimonio ? 'Sim' : 'Não'}</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 transition-all hover:shadow-lg">
+            <h3 class="font-bold text-slate-800 dark:text-white mb-4 flex items-center gap-2">
+                <i data-lucide="lightbulb" class="text-yellow-500 w-5 h-5"></i> Análise Inteligente
+            </h3>
+            <div class="space-y-3">
+                ${insights.length > 0 ? insights.map(insight => `
+                    <div class="p-4 ${insight.color === 'green' ? 'bg-green-50 dark:bg-green-900/20 border-green-100 dark:border-green-800 text-green-800 dark:text-green-300' : insight.color === 'orange' ? 'bg-orange-50 dark:bg-orange-900/20 border-orange-100 dark:border-orange-800 text-orange-800 dark:text-orange-300' : insight.color === 'blue' ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-100 dark:border-blue-800 text-blue-800 dark:text-blue-300' : 'bg-purple-50 dark:bg-purple-900/20 border-purple-100 dark:border-purple-800 text-purple-800 dark:text-purple-300'} border rounded-xl text-sm flex gap-3 items-start transition-all hover:scale-105">
+                        <i data-lucide="${insight.icon}" class="w-5 h-5 mt-0.5 shrink-0"></i>
+                        <span>${insight.text}</span>
+                    </div>
+                `).join('') : '<p class="text-slate-400 text-sm">Sem dados suficientes.</p>'}
+            </div>
+        </div>
+        
+        ${renderGoalsCard(currentTxs)}
+
+        <div class="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 transition-all hover:shadow-lg">
+            <h3 class="font-bold text-slate-800 dark:text-white mb-4 flex items-center gap-2">
+                <i data-lucide="trending-up" class="text-indigo-600 dark:text-indigo-400 w-5 h-5"></i> 
+                Fluxo de Caixa Projetado (30 Dias)
+            </h3>
+            <div class="h-64"><canvas id="chartProjection"></canvas></div>
+        </div>
+        
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div class="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 flex justify-between items-center transition-all hover:shadow-lg">
+                <div>
+                    <p class="text-sm text-slate-500 dark:text-slate-400 font-medium">Entradas (Período)</p>
+                    <h2 class="text-2xl font-bold text-green-600 dark:text-green-400 ${sensClass}">${formatCurrency(currentStats.entradas)}</h2>
+                    <div class="flex items-center gap-1 mt-1 text-xs ${varEntradas >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400'}">
+                        <i data-lucide="${varEntradas >= 0 ? 'arrow-up-right' : 'arrow-down-right'}" class="w-3 h-3"></i>
+                        ${Math.abs(varEntradas).toFixed(1)}% vs anterior
+                    </div>
+                </div>
+                <div class="bg-green-100 dark:bg-green-900 p-3 rounded-lg text-green-600 dark:text-green-400">
+                    <i data-lucide="trending-up"></i>
+                </div>
+            </div>
+            
+            <div class="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 flex justify-between items-center transition-all hover:shadow-lg">
+                <div>
+                    <p class="text-sm text-slate-500 dark:text-slate-400 font-medium">Saídas (Período)</p>
+                    <h2 class="text-2xl font-bold text-red-600 dark:text-red-400 ${sensClass}">${formatCurrency(currentStats.saidas)}</h2>
+                    <div class="flex items-center gap-1 mt-1 text-xs ${varSaidas <= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400'}">
+                        <i data-lucide="${varSaidas <= 0 ? 'arrow-down-right' : 'arrow-up-right'}" class="w-3 h-3"></i>
+                        ${Math.abs(varSaidas).toFixed(1)}% vs anterior
+                    </div>
+                </div>
+                <div class="bg-red-100 dark:bg-red-900 p-3 rounded-lg text-red-600 dark:text-red-400">
+                    <i data-lucide="trending-down"></i>
+                </div>
+            </div>
+            
+            <div class="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 flex justify-between items-center transition-all hover:shadow-lg">
+                <div>
+                    <p class="text-sm text-slate-500 dark:text-slate-400 font-medium">Saldo Líquido</p>
+                    <h2 class="text-2xl font-bold ${currentStats.saldo >= 0 ? 'text-blue-600 dark:text-blue-400' : 'text-red-600 dark:text-red-400'} ${sensClass}">${formatCurrency(currentStats.saldo)}</h2>
+                    <div class="flex items-center gap-1 mt-1 text-xs ${varSaldo >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400'}">
+                        <i data-lucide="${varSaldo >= 0 ? 'arrow-up-right' : 'arrow-down-right'}" class="w-3 h-3"></i>
+                        ${Math.abs(varSaldo).toFixed(1)}% vs anterior
+                    </div>
+                </div>
+                <div class="bg-blue-100 dark:bg-blue-900 p-3 rounded-lg text-blue-600 dark:text-blue-400">
+                    <i data-lucide="wallet"></i>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 transition-all hover:shadow-lg">
+            <h3 class="font-bold text-slate-800 dark:text-white mb-4 flex items-center gap-2">
+                <i data-lucide="bar-chart-3" class="text-indigo-600 dark:text-indigo-400 w-5 h-5"></i> 
+                Evolução dos Últimos 12 Meses
+            </h3>
+            <div class="h-80"><canvas id="chartMonthlyTrend"></canvas></div>
+        </div>
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div class="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 transition-all hover:shadow-lg">
+                <h3 class="font-bold text-slate-800 dark:text-white mb-4">Comparativo de Períodos</h3>
+                <div class="h-64"><canvas id="chartEvolution"></canvas></div>
+            </div>
+            <div class="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 transition-all hover:shadow-lg">
+                <h3 class="font-bold text-slate-800 dark:text-white mb-4">Gastos por Categoria</h3>
+                <div class="h-64 flex justify-center"><canvas id="chartCategory"></canvas></div>
+            </div>
+        </div>
+        
+        <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 overflow-hidden transition-all hover:shadow-lg page-break">
+            <div class="p-6 border-b border-slate-50 dark:border-slate-700">
+                <h3 class="font-bold text-slate-800 dark:text-white">
+                    Minhas Contas <span class="text-sm font-normal text-slate-400">(Clique para detalhes)</span>
+                </h3>
+            </div>
+            <div class="divide-y divide-slate-50 dark:divide-slate-700">
+                ${GLOBAL_DATA.accounts.map(acc => `
+                    <div onclick="goToDetail('${acc.id}')" class="p-6 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer transition-all group hover:scale-105">
+                        <div class="flex items-center gap-4">
+                            <div class="w-10 h-10 bg-slate-100 dark:bg-slate-700 rounded-lg flex items-center justify-center text-xl shadow-sm text-slate-600 dark:text-slate-300">
+                                ${acc.icon}
+                            </div>
+                            <div>
+                                <p class="text-xs text-slate-500 dark:text-slate-400 font-medium">${acc.type}</p>
+                                <h4 class="font-bold text-slate-800 dark:text-white">${acc.name}</h4>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-4">
+                            <span class="font-bold text-lg ${acc.balance >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'} ${sensClass}">
+                                ${formatCurrency(acc.balance)}
+                            </span>
+                            <i data-lucide="chevron-right" class="text-slate-300 group-hover:text-blue-500 no-print"></i>
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+        </div>
+        
+        ${renderAdvancedFilters()}
+        
+        <!-- LEGENDA DE STATUS (NOVA) -->
+        <div class="bg-slate-50 dark:bg-slate-800 p-4 rounded-lg border border-slate-200 dark:border-slate-700 no-print">
+            <p class="text-xs font-bold text-slate-600 dark:text-slate-400 mb-2 flex items-center gap-2">
+                <i data-lucide="info" class="w-3 h-3"></i>
+                Legenda de Status
+            </p>
+            <div class="flex flex-wrap gap-3 text-xs">
+                <div class="flex items-center gap-2">
+                    <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 border border-green-300 dark:border-green-700">
+                        <i data-lucide="check-circle" class="w-3 h-3"></i>
+                        Pago
+                    </span>
+                    <span class="text-slate-500">Transação concluída</span>
+                </div>
+                
+                <div class="flex items-center gap-2">
+                    <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 border border-yellow-300 dark:border-yellow-700">
+                        <i data-lucide="clock" class="w-3 h-3"></i>
+                        Pendente
+                    </span>
+                    <span class="text-slate-500">Aguardando pagamento</span>
+                </div>
+                
+                <div class="flex items-center gap-2">
+                    <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 border border-orange-300 dark:border-orange-700">
+                        <i data-lucide="clock" class="w-3 h-3"></i>
+                        Vence Hoje
+                    </span>
+                    <span class="text-slate-500">Vencimento hoje</span>
+                </div>
+                
+                <div class="flex items-center gap-2">
+                    <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 border border-red-300 dark:border-red-700">
+                        <i data-lucide="alert-circle" class="w-3 h-3"></i>
+                        Atrasado
+                    </span>
+                    <span class="text-slate-500">Vencimento passou</span>
+                </div>
+            </div>
+        </div>
+        
+        <!-- TABELA DE TRANSAÇÕES (ATUALIZADA COM STATUS) -->
+        <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 overflow-hidden transition-all hover:shadow-lg">
+            <div class="p-6 border-b border-slate-50 dark:border-slate-700 flex items-center justify-between flex-wrap gap-4">
+                <div>
+                    <h3 class="font-bold text-slate-800 dark:text-white">Lançamentos</h3>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Mostrando ${showStart}-${showEnd} de ${totalItems} registros</p>
+                </div>
+                
+                <div class="flex items-center gap-2">
+                    <div class="flex items-center gap-1 bg-slate-100 dark:bg-slate-700 rounded-lg p-1 mr-2 no-print">
+                        <button onclick="changePage(-1)" ${CURRENT_PAGE === 1 ? 'disabled' : ''} class="p-1.5 rounded-md hover:bg-white dark:hover:bg-slate-600 transition-all disabled:opacity-30 disabled:cursor-not-allowed text-slate-600 dark:text-slate-300">
+                            <i data-lucide="chevron-left" class="w-4 h-4"></i>
+                        </button>
+                        <span class="text-xs font-bold text-slate-600 dark:text-slate-300 px-2 min-w-[30px] text-center">${CURRENT_PAGE}</span>
+                        <button onclick="changePage(1)" ${CURRENT_PAGE >= totalPages ? 'disabled' : ''} class="p-1.5 rounded-md hover:bg-white dark:hover:bg-slate-600 transition-all disabled:opacity-30 disabled:cursor-not-allowed text-slate-600 dark:text-slate-300">
+                            <i data-lucide="chevron-right" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                    <button onclick="exportToCSV(GLOBAL_DATA.transactions, 'transacoes_completas.csv')" class="no-print bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 transition-colors flex items-center gap-2">
+                        <i data-lucide="download" class="w-4 h-4"></i> Exportar CSV
+                    </button>
+                </div>
+            </div>
+            
+            <div class="overflow-x-auto">
+                <table class="w-full text-left">
+                    <thead class="bg-slate-50 dark:bg-slate-700 text-slate-500 dark:text-slate-400 text-xs uppercase font-semibold">
+                        <tr>
+                            <th class="p-4 pl-6">Data</th>
+                            <th class="p-4">Status</th>
+                            <th class="p-4">Categoria</th>
+                            <th class="p-4">Descrição</th>
+                            <th class="p-4">Conta</th>
+                            <th class="p-4 pr-6 text-right">Valor</th>
+                        </tr>
+                    </thead>
+                    <tbody id="transactions-tbody" class="divide-y divide-slate-50 dark:divide-slate-700 text-sm">
+                        ${tableRows}
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="p-4 bg-slate-50 dark:bg-slate-700/50 border-t border-slate-100 dark:border-slate-700 flex flex-wrap justify-end gap-6">
+                <div class="text-right">
+                    <span class="text-xs text-slate-500 dark:text-slate-400 font-medium uppercase">Total Entradas</span>
+                    <p class="text-green-600 dark:text-green-400 font-bold ${sensClass}">${formatCurrency(totalEntradasFiltradas)}</p>
+                </div>
+                <div class="text-right">
+                    <span class="text-xs text-slate-500 dark:text-slate-400 font-medium uppercase">Total Saídas</span>
+                    <p class="text-red-600 dark:text-red-400 font-bold ${sensClass}">${formatCurrency(totalSaidasFiltradas)}</p>
+                </div>
+                <div class="text-right pl-6 border-l border-slate-200 dark:border-slate-600">
+                    <span class="text-xs text-slate-500 dark:text-slate-400 font-medium uppercase">Resultado (Filtro)</span>
+                    <p class="font-bold ${totalSaldoFiltrado >= 0 ? 'text-blue-600 dark:text-blue-400' : 'text-red-600 dark:text-red-400'} ${sensClass}">${formatCurrency(totalSaldoFiltrado)}</p>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+    // ----------------------------------------------------------
+    // 8. FUNÇÃO AUXILIAR: TABELA DRE GERENCIAL
+    // ----------------------------------------------------------
+    function renderDRETable(txs) {
+        const dre = calculateDREData(txs);
+        const formatRow = (label, val, indent=0, isBold=false, colorClass='') => `
+            <div class="flex justify-between items-center p-3 hover:bg-slate-50 dark:hover:bg-slate-700 border-b border-slate-100 dark:border-slate-700 ${isBold?'font-bold':''}">
+                <span class="${indent ? 'pl-'+indent*4 : ''} text-slate-700 dark:text-slate-300">${label}</span>
+                <span class="${colorClass} ${IS_PRIVACY_MODE ? 'blur-content' : ''}">${formatCurrency(val)}</span>
+            </div>`;
+
+        return `
+            <div class="bg-white dark:bg-slate-800 p-8 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-700 max-w-3xl mx-auto animate-fadeIn">
+                <h2 class="text-2xl font-bold text-center mb-6 text-slate-800 dark:text-white">Demonstrativo de Resultado (Gerencial)</h2>
+                
+                <div class="border rounded-xl overflow-hidden">
+                    <div class="bg-slate-50 dark:bg-slate-700 p-3 font-bold text-xs uppercase text-slate-500 dark:text-slate-400 flex justify-between">
+                        <span>Descrição</span><span>Valor</span>
+                    </div>
+                    
+                    ${formatRow('(+) Receita Bruta', dre.receita, 0, true, 'text-blue-600')}
+                    ${formatRow('(-) Custos Variáveis', dre.custoVar, 4, false, 'text-red-500')}
+                    
+                    <div class="bg-blue-50 dark:bg-blue-900/30 p-3 flex justify-between font-bold border-y border-blue-100 dark:border-blue-800">
+                        <span class="text-blue-800 dark:text-blue-200">(=) Margem de Contribuição</span>
+                        <span class="text-blue-800 dark:text-blue-200 ${IS_PRIVACY_MODE ? 'blur-content' : ''}">${formatCurrency(dre.margemContrib)}</span>
+                    </div>
+
+                    ${formatRow('(-) Despesas Fixas', dre.despFixa, 4, false, 'text-red-500')}
+                    
+                    <div class="bg-indigo-50 dark:bg-indigo-900/30 p-3 flex justify-between font-bold border-y border-indigo-100 dark:border-indigo-800 text-lg">
+                        <span class="text-indigo-800 dark:text-indigo-200">(=) EBITDA (Operacional)</span>
+                        <span class="text-indigo-800 dark:text-indigo-200 ${IS_PRIVACY_MODE ? 'blur-content' : ''}">${formatCurrency(dre.ebitda)}</span>
+                    </div>
+                    
+                    ${formatRow('(+/-) Investimentos', dre.groups['Investimento'], 4, false, 'text-slate-500')}
+                    ${formatRow('(+/-) Não Operacional', dre.groups['Não Operacional'], 4, false, 'text-slate-500')}
+                    
+                    <div class="bg-green-100 dark:bg-green-900/30 p-4 flex justify-between font-bold text-xl rounded-b-xl">
+                        <span class="text-green-800 dark:text-green-200">(=) Resultado Líquido</span>
+                        <span class="text-green-800 dark:text-green-200 ${IS_PRIVACY_MODE ? 'blur-content' : ''}">${formatCurrency(dre.liquido)}</span>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    // ----------------------------------------------------------
+    // 9. DETALHES DA CONTA
+    // ----------------------------------------------------------
+    function renderAccountDetail() {
+        const acc = SELECTED_ACCOUNT;
+        const allTxs = GLOBAL_DATA.transactions.filter(t => t.accountId === acc.id);
+        const rangeTxs = getTransactionsByRange(allTxs, START_DATE, END_DATE).sort((a, b) => new Date(b.date) - new Date(a.date));
+        let txs = SELECTED_SUBCATEGORIES.length > 0 ? rangeTxs.filter(t => SELECTED_SUBCATEGORIES.includes(t.subcategory)) : rangeTxs;
+        txs = applyFilters(txs);
+        const accStats = calculateStats(txs);
+        const allSubcategories = [...new Set(allTxs.map(t => t.subcategory))].sort();
+        const sensClass = IS_PRIVACY_MODE ? 'sensitive-data blur-content' : 'sensitive-data';
+
+        // Totais
+        const totalEntradasConta = txs.filter(t => t.type === 'Entrada').reduce((acc, t) => acc + t.value, 0);
+        const totalSaidasConta = txs.filter(t => t.type === 'Saída').reduce((acc, t) => acc + t.value, 0);
+        const totalSaldoConta = totalEntradasConta - totalSaidasConta;
+        
+        // Paginação
+        const totalItems = txs.length;
+        const totalPages = Math.ceil(totalItems / ITEMS_PER_PAGE) || 1;
+        if (CURRENT_PAGE > totalPages) CURRENT_PAGE = totalPages;
+        const startIndex = (CURRENT_PAGE - 1) * ITEMS_PER_PAGE;
+        const endIndex = startIndex + ITEMS_PER_PAGE;
+        const paginatedTxs = txs.slice(startIndex, endIndex);
+        const showStart = totalItems > 0 ? startIndex + 1 : 0;
+        const showEnd = Math.min(endIndex, totalItems);
+
+        const html = `
+          <div class="fade-in space-y-6 transition-all">
+            <button onclick="goBack()" class="flex items-center gap-2 text-slate-500 dark:text-slate-400 hover:text-blue-600 font-medium mb-2 no-print transition-colors"><i data-lucide="arrow-left"></i> Voltar ao Dashboard</button>
+            ${renderHeader(acc.name, `Detalhes da conta (${acc.type})`)}
+            
+            <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 transition-all hover:shadow-lg no-print">
+                <div class="flex items-center gap-5 mb-4">
+                    <div class="w-16 h-16 bg-blue-50 dark:bg-slate-700 rounded-2xl flex items-center justify-center text-4xl transition-all hover:scale-105">${acc.icon}</div>
+                    <div><h2 class="text-xl font-bold text-slate-700 dark:text-white">Resumo do Período</h2><span class="inline-block px-3 py-1 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-sm font-medium mt-1">${acc.type}</span></div>
+                </div>
+                <div class="p-4 bg-slate-50 dark:bg-slate-700 rounded-xl border border-slate-200 dark:border-slate-600">
+                    <p class="text-xs font-bold text-slate-400 uppercase mb-2">Filtro de Data</p>${renderFilterBar()}
+                </div>
+            </div>
+
+            ${allSubcategories.length > 0 ? `<div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 transition-all hover:shadow-lg"><div class="flex items-center justify-between mb-3"><h3 class="font-bold text-slate-700 dark:text-white flex items-center gap-2"><i data-lucide="filter" class="w-4 h-4"></i> Filtrar por Subcategoria</h3>${SELECTED_SUBCATEGORIES.length > 0 ? `<button onclick="clearSubcategoryFilter()" class="text-xs text-blue-600 hover:text-blue-700 font-medium">Limpar filtros</button>` : ''}</div><div class="flex flex-wrap gap-2">${allSubcategories.map(sub => {const isSelected = SELECTED_SUBCATEGORIES.includes(sub); return `<button onclick="toggleSubcategoryFilter('${sub}')" class="px-3 py-1.5 rounded-lg text-sm font-medium transition-all hover:scale-105 ${isSelected ? 'bg-blue-600 text-white shadow-sm' : 'bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-600 hover:border-blue-300'}">${isSelected ? '✓ ' : ''}${sub}</button>`;}).join('')}</div>${SELECTED_SUBCATEGORIES.length > 0 ? `<p class="text-xs text-slate-500 mt-3">Mostrando ${paginatedTxs.length} de ${rangeTxs.length} movimentações</p>` : ''}</div>` : ''}
+            
+            ${renderAdvancedFilters()}
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div class="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 flex justify-between items-center transition-all hover:shadow-lg"><div><p class="text-sm text-slate-500 dark:text-slate-400">Entradas</p><p class="text-2xl font-bold text-green-600 dark:text-green-400 ${sensClass}">${formatCurrency(accStats.entradas)}</p></div><div class="bg-green-50 dark:bg-green-900 p-3 rounded-lg"><i data-lucide="trending-up" class="text-green-600 dark:text-green-400"></i></div></div>
+                <div class="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 flex justify-between items-center transition-all hover:shadow-lg"><div><p class="text-sm text-slate-500 dark:text-slate-400">Saídas</p><p class="text-2xl font-bold text-red-600 dark:text-red-400 ${sensClass}">${formatCurrency(accStats.saidas)}</p></div><div class="bg-red-50 dark:bg-red-900 p-3 rounded-lg"><i data-lucide="trending-down" class="text-red-600 dark:text-red-400"></i></div></div>
+                <div class="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 flex justify-between items-center transition-all hover:shadow-lg"><div><p class="text-sm text-slate-500 dark:text-slate-400">Resultado</p><p class="text-2xl font-bold ${accStats.saldo >= 0 ? 'text-blue-600 dark:text-blue-400' : 'text-red-600 dark:text-red-400'} ${sensClass}">${formatCurrency(accStats.saldo)}</p></div><div class="bg-blue-50 dark:bg-blue-900 p-3 rounded-lg"><i data-lucide="target" class="text-blue-600 dark:text-blue-400"></i></div></div>
+            </div>
+
+            <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 transition-all hover:shadow-lg"><h2 class="text-lg font-bold text-slate-800 dark:text-white mb-4 flex items-center gap-2"><i data-lucide="activity" class="w-5 h-5 text-blue-600"></i> Histórico de Movimentação</h2><div class="h-72"><canvas id="chartAccountTrend"></canvas></div></div>
+            
+            <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 overflow-hidden transition-all hover:shadow-lg">
+                <div class="p-6 border-b border-slate-50 dark:border-slate-700 flex items-center justify-between flex-wrap gap-4">
+                    <div><h3 class="font-bold text-slate-800 dark:text-white">Extrato Completo</h3><p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Mostrando ${showStart}-${showEnd} de ${totalItems} registros</p></div>
+                    <div class="flex items-center gap-2">
+                        <div class="flex items-center gap-1 bg-slate-100 dark:bg-slate-700 rounded-lg p-1 mr-2 no-print">
+                            <button onclick="changePage(-1)" ${CURRENT_PAGE === 1 ? 'disabled' : ''} class="p-1.5 rounded-md hover:bg-white dark:hover:bg-slate-600 transition-all disabled:opacity-30 disabled:cursor-not-allowed text-slate-600 dark:text-slate-300"><i data-lucide="chevron-left" class="w-4 h-4"></i></button>
+                            <span class="text-xs font-bold text-slate-600 dark:text-slate-300 px-2 min-w-[30px] text-center">${CURRENT_PAGE}</span>
+                            <button onclick="changePage(1)" ${CURRENT_PAGE >= totalPages ? 'disabled' : ''} class="p-1.5 rounded-md hover:bg-white dark:hover:bg-slate-600 transition-all disabled:opacity-30 disabled:cursor-not-allowed text-slate-600 dark:text-slate-300"><i data-lucide="chevron-right" class="w-4 h-4"></i></button>
+                        </div>
+                        <button onclick="exportToCSV(txs, 'extrato_${acc.name.replace(/\s/g, '_')}.csv')" class="no-print bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors flex items-center gap-2"><i data-lucide="download"></i> CSV</button>
+                    </div>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead class="bg-slate-50 dark:bg-slate-700 text-slate-500 dark:text-slate-400 uppercase text-xs"><tr><th class="p-4">Data</th><th class="p-4">Descrição</th><th class="p-4">Categoria</th><th class="p-4">Subcategoria</th><th class="p-4 text-right">Valor</th></tr></thead>
+                        <tbody class="divide-y divide-slate-100 dark:divide-slate-700 text-sm text-slate-700 dark:text-slate-300">${paginatedTxs.map(t => `<tr class="hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"><td data-label="Data" class="p-4 text-slate-500 dark:text-slate-400">${formatDate(t.date)}</td><td data-label="Descrição" class="p-4 font-medium">${t.description}</td><td data-label="Categoria" class="p-4"><span class="px-2 py-1 bg-blue-50 dark:bg-blue-900 text-blue-600 dark:text-blue-300 rounded-full text-xs font-medium">${t.category}</span></td><td data-label="Subcategoria" class="p-4 text-slate-500 dark:text-slate-400">${t.subcategory}</td><td data-label="Valor" class="p-4 text-right font-bold ${t.type === 'Entrada' ? 'text-green-600 dark:text-green-400' : 'text-slate-800 dark:text-slate-300'} ${sensClass}">${t.type === 'Entrada' ? '+' : '-'}${formatCurrency(t.value)}</td></tr>`).join('')}</tbody>
+                    </table>
+                </div>
+
+                <div class="p-4 bg-slate-50 dark:bg-slate-700/50 border-t border-slate-100 dark:border-slate-700 flex flex-wrap justify-end gap-6">
+                    <div class="text-right">
+                        <span class="text-xs text-slate-500 dark:text-slate-400 font-medium uppercase">Total Entradas</span>
+                        <p class="text-green-600 dark:text-green-400 font-bold ${sensClass}">${formatCurrency(totalEntradasConta)}</p>
+                    </div>
+                    <div class="text-right">
+                        <span class="text-xs text-slate-500 dark:text-slate-400 font-medium uppercase">Total Saídas</span>
+                        <p class="text-red-600 dark:text-red-400 font-bold ${sensClass}">${formatCurrency(totalSaidasConta)}</p>
+                    </div>
+                    <div class="text-right pl-6 border-l border-slate-200 dark:border-slate-600">
+                        <span class="text-xs text-slate-500 dark:text-slate-400 font-medium uppercase">Resultado (Filtro)</span>
+                        <p class="font-bold ${totalSaldoConta >= 0 ? 'text-blue-600 dark:text-blue-400' : 'text-red-600 dark:text-red-400'} ${sensClass}">${formatCurrency(totalSaldoConta)}</p>
+                    </div>
+                </div>
+
+            </div>
+            <div class="h-8"></div>
+          </div>`;
+        document.getElementById('app').innerHTML = html;
+        setTimeout(() => { 
+            renderAccountChart(txs); 
+            lucide.createIcons(); // Ícones para detalhe da conta
+        }, 100);
+    }
+
+function renderStatusLegend() {
+    return `
+        <div class="bg-slate-50 dark:bg-slate-800 p-4 rounded-lg border border-slate-200 dark:border-slate-700 mb-4 no-print">
+            <p class="text-xs font-bold text-slate-600 dark:text-slate-400 mb-2 flex items-center gap-2">
+                <i data-lucide="info" class="w-3 h-3"></i>
+                Legenda de Status
+            </p>
+            <div class="flex flex-wrap gap-3 text-xs">
+                <div class="flex items-center gap-2">
+                    <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 border border-green-300 dark:border-green-700">
+                        <i data-lucide="check-circle" class="w-3 h-3"></i>
+                        Pago
+                    </span>
+                    <span class="text-slate-500">Transação concluída</span>
+                </div>
+                
+                <div class="flex items-center gap-2">
+                    <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 border border-yellow-300 dark:border-yellow-700">
+                        <i data-lucide="clock" class="w-3 h-3"></i>
+                        Pendente
+                    </span>
+                    <span class="text-slate-500">Aguardando pagamento</span>
+                </div>
+                
+                <div class="flex items-center gap-2">
+                    <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 border border-orange-300 dark:border-orange-700">
+                        <i data-lucide="clock" class="w-3 h-3"></i>
+                        Vence Hoje
+                    </span>
+                    <span class="text-slate-500">Vencimento hoje</span>
+                </div>
+                
+                <div class="flex items-center gap-2">
+                    <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 border border-red-300 dark:border-red-700">
+                        <i data-lucide="alert-circle" class="w-3 h-3"></i>
+                        Atrasado
+                    </span>
+                    <span class="text-slate-500">Vencimento passou</span>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+</script>
