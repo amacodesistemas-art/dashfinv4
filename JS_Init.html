@@ -2,6 +2,101 @@
     // ===================================
     // INICIALIZAÇÃO
     // ===================================
+    
+    // Registra Service Worker para PWA
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('service-worker.js')
+                .then((registration) => {
+                    console.log('✅ Service Worker registrado:', registration.scope);
+                    
+                    // Verifica se há atualização
+                    registration.addEventListener('updatefound', () => {
+                        const newWorker = registration.installing;
+                        newWorker.addEventListener('statechange', () => {
+                            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                                // Nova versão disponível
+                                showUpdateNotification();
+                            }
+                        });
+                    });
+                })
+                .catch((error) => {
+                    console.log('⚠️ Service Worker não registrado:', error);
+                });
+        });
+    }
+    
+    // Notifica sobre atualização disponível
+    function showUpdateNotification() {
+        const notification = document.createElement('div');
+        notification.className = 'fixed top-4 left-1/2 transform -translate-x-1/2 bg-blue-600 text-white px-6 py-3 rounded-lg shadow-2xl z-[999] flex items-center gap-3 animate-slideDown';
+        notification.innerHTML = `
+            <i data-lucide="download-cloud" class="w-5 h-5"></i>
+            <span class="font-medium">Nova versão disponível!</span>
+            <button onclick="location.reload()" class="bg-white text-blue-600 px-3 py-1 rounded font-bold hover:bg-blue-50 transition-colors">
+                Atualizar
+            </button>
+            <button onclick="this.parentElement.remove()" class="text-blue-100 hover:text-white">
+                <i data-lucide="x" class="w-4 h-4"></i>
+            </button>
+        `;
+        document.body.appendChild(notification);
+        lucide.createIcons();
+    }
+    
+    // Detecta instalação PWA
+    let deferredPrompt;
+    window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        deferredPrompt = e;
+        
+        // Mostra botão de instalação após 10 segundos
+        setTimeout(showInstallPrompt, 10000);
+    });
+    
+    function showInstallPrompt() {
+        if (!deferredPrompt) return;
+        
+        const prompt = document.createElement('div');
+        prompt.className = 'fixed bottom-24 right-6 bg-white dark:bg-slate-800 p-4 rounded-xl shadow-2xl z-50 max-w-xs animate-slideUp border-2 border-blue-500';
+        prompt.innerHTML = `
+            <div class="flex items-start gap-3">
+                <div class="p-2 bg-blue-100 dark:bg-blue-900 rounded-lg">
+                    <i data-lucide="smartphone" class="w-5 h-5 text-blue-600 dark:text-blue-400"></i>
+                </div>
+                <div class="flex-1">
+                    <h4 class="font-bold text-slate-800 dark:text-white text-sm mb-1">Instalar App</h4>
+                    <p class="text-xs text-slate-600 dark:text-slate-400 mb-3">Acesse o dashboard direto do seu celular!</p>
+                    <div class="flex gap-2">
+                        <button onclick="installPWA()" class="bg-blue-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-blue-700 transition-colors">
+                            Instalar
+                        </button>
+                        <button onclick="this.closest('div[class*=fixed]').remove()" class="text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 px-2 text-xs">
+                            Agora não
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(prompt);
+        lucide.createIcons();
+    }
+    
+    async function installPWA() {
+        if (!deferredPrompt) return;
+        
+        deferredPrompt.prompt();
+        const { outcome } = await deferredPrompt.userChoice;
+        
+        if (outcome === 'accepted') {
+            showToast('✅ App instalado com sucesso!', 'success');
+        }
+        
+        deferredPrompt = null;
+        document.querySelector('div[class*="fixed bottom-24"]')?.remove();
+    }
+    
     function init() {
         const now = new Date();
         START_DATE = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -16,11 +111,25 @@
         if (typeof google === 'undefined' || !google.script) {
            document.getElementById('app').innerHTML = '<p class="text-red-500 text-center mt-10">Este painel deve ser executado no Google Apps Script.</p>';
         } else {
+           // Mostra loading aprimorado
+           showEnhancedLoading();
+           
            google.script.run
             .withSuccessHandler(function(jsonTexto) {
                try {
                  GLOBAL_DATA = JSON.parse(jsonTexto);
                  if(!GLOBAL_DATA || GLOBAL_DATA.error) throw new Error("Erro nos dados");
+                 
+                 // Verifica validação de dados
+                 if (GLOBAL_DATA.validation && !GLOBAL_DATA.validation.valid) {
+                     console.warn('⚠️ Dados com problemas de validação:', GLOBAL_DATA.validation);
+                     
+                     // Se tem erros críticos, mostra alerta
+                     if (GLOBAL_DATA.validation.errors.length > 0) {
+                         showToast('⚠️ Alguns dados estão com problemas. Contate o suporte.', 'warning', 5000);
+                     }
+                 }
+                 
                  LAST_UPDATE_TIME = new Date(GLOBAL_DATA.lastUpdate);
                  renderApp();
                  
@@ -32,14 +141,48 @@
                  }, 1000);
                  
                } catch (e) {
-                 document.getElementById('app').innerHTML = `<p class="text-red-500 text-center mt-10">Erro ao processar dados: ${e.message}</p>`;
+                 document.getElementById('app').innerHTML = `
+                    <div class="text-center mt-20 p-8">
+                        <i data-lucide="alert-triangle" class="w-16 h-16 text-red-500 mx-auto mb-4"></i>
+                        <h2 class="text-2xl font-bold text-red-600 mb-2">Erro ao processar dados</h2>
+                        <p class="text-slate-600 mb-4">${e.message}</p>
+                        <button onclick="location.reload()" class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors">
+                            Tentar Novamente
+                        </button>
+                    </div>
+                 `;
+                 lucide.createIcons();
                }
             })
             .withFailureHandler(function(error) {
-               document.getElementById('app').innerHTML = `<p class="text-red-500 text-center mt-10">Falha ao conectar: ${error.message}</p>`;
+               document.getElementById('app').innerHTML = `
+                    <div class="text-center mt-20 p-8">
+                        <i data-lucide="wifi-off" class="w-16 h-16 text-orange-500 mx-auto mb-4"></i>
+                        <h2 class="text-2xl font-bold text-orange-600 mb-2">Falha na conexão</h2>
+                        <p class="text-slate-600 mb-4">${error.message}</p>
+                        <button onclick="location.reload()" class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors">
+                            Reconectar
+                        </button>
+                    </div>
+               `;
+               lucide.createIcons();
             })
             .getClientData();
         }
+    }
+    
+    // Loading aprimorado
+    function showEnhancedLoading() {
+        document.getElementById('app').innerHTML = `
+            <div class="flex flex-col items-center justify-center min-h-screen">
+                <div class="relative">
+                    <div class="w-20 h-20 border-4 border-blue-200 dark:border-blue-900 rounded-full"></div>
+                    <div class="w-20 h-20 border-4 border-blue-600 rounded-full animate-spin border-t-transparent absolute top-0 left-0"></div>
+                </div>
+                <h2 class="text-xl font-bold text-slate-800 dark:text-white mt-6">Carregando Dashboard...</h2>
+                <p class="text-sm text-slate-500 dark:text-slate-400 mt-2">Buscando dados da planilha</p>
+            </div>
+        `;
     }
     
     init();
