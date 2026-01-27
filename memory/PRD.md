@@ -13,113 +13,205 @@ Os clientes têm uma vista somente-leitura do dashboard. A equipa do utilizador 
 
 ### Estrutura de Planos
 
-| Plano | Preço | IA | DRE | Alertas |
-|-------|-------|-----|-----|---------|
-| Básico | R$ 297/mês | ❌ | ❌ | ❌ |
-| Profissional | R$ 597/mês | 30/mês | ✅ | ❌ |
-| Enterprise | R$ 1.297/mês | ∞ | ✅ | ✅ |
+| Plano | Preço | IA | DRE | Alertas | Importação |
+|-------|-------|-----|-----|---------|------------|
+| Básico | R$ 297/mês | ❌ | ❌ | ❌ | ✅ |
+| Profissional | R$ 597/mês | 30/mês | ✅ | ❌ | ✅ |
+| Enterprise | R$ 1.297/mês | ∞ | ✅ | ✅ | ✅ |
 
 ### Custo de IA por Consulta
 ~R$ 0,003 (insignificante) - usando GPT-4o-mini
 
-## Requisitos do Produto
-
-### Funcionalidades Core
-- [x] Dashboard de visão geral com KPIs
-- [x] Gráficos de fluxo de caixa e despesas
-- [x] Vista de DRE Gerencial (P&L)
-- [x] Capacidades avançadas de filtragem
-- [x] Acompanhamento de metas
-- [x] Páginas de detalhe de contas
-- [x] Sistema de limites de IA por plano
-
-### Funcionalidades UX
-- [x] Tema Escuro/Claro
-- [x] Modo de privacidade (blur de valores)
-- [x] Responsividade completa
-- [x] Micro-interações
-
-### Sistema de Planos Modulares
-- [x] Plano Básico (R$ 297)
-- [x] Plano Profissional (R$ 597) - com 30 consultas IA/mês
-- [x] Plano Enterprise (R$ 1.297) - IA ilimitada
-
-### Chatbot IA
-- [x] Interface de chat integrada
-- [x] Respostas baseadas em dados financeiros reais
-- [x] Contexto sensível ao período filtrado ✅
-- [x] Controle de limites por plano ✅
-- [x] Contador de uso mensal ✅
-
 ## O Que Foi Implementado
 
+### Versão 3.3.0 (Dezembro 2025) ✅ ATUAL
+
+#### Arquitetura Multi-Cliente
+- Sistema centralizado para gerenciar 10, 100+ clientes
+- URL única com parâmetro `?client=ID`
+- Planilha ADMIN_MASTER para controle
+- Um deploy = todos os clientes atualizados
+- Log de acessos e uso de IA centralizado
+
+#### Sistema de Alertas Automáticos (`AlertService.js`)
+- 🔴 Fluxo de caixa crítico (projeção negativa)
+- 💰 Inadimplência (faturas atrasadas)
+- 📈 Despesas anormais (+50% da média)
+- 🎯 Metas estouradas ou próximas do limite
+- 📅 Vencimentos do dia
+- 💵 Saldo baixo em contas
+- Interface de alertas no dashboard
+
+#### Categorização Automática com IA (`CategorizationService.js`)
+- Regras de categorização configuráveis
+- Categorização por IA quando não há regra
+- Aprendizado com correções do usuário
+- Batch processing para importações
+
+#### Importação de Extratos (`ImportService.js`)
+- Parser de arquivos OFX (padrão bancário)
+- Parser de arquivos CSV configurável
+- Detecção de duplicatas
+- Aba de conciliação para revisão
+- Categorização automática na importação
+- Interface drag-and-drop
+
+#### Frontend (`JS_Alerts.html`, `JS_Import.html`)
+- Painel de alertas com prioridades
+- Modal de importação com preview
+- Configuração de CSV dinâmica
+- Link direto para planilha de revisão
+
 ### Versão 3.2.0 (Dezembro 2025)
-- **Service Worker corrigido**: Agora usa `ContentService` para MIME type correto
-- **Chatbot IA melhorado**:
-  - Modelo atualizado para `gpt-4o-mini` (mais rápido e económico)
-  - Tratamento de erros robusto
-  - Logging detalhado para debug
-- **Sistema de limites de IA**:
-  - Controle mensal de consultas por plano
-  - Contador automático na planilha CONFIG
-  - Mensagem de limite atingido
-  - Contador de consultas restantes na resposta
-- **Preços atualizados** para comercialização
+- Service Worker corrigido
+- Chatbot IA com contexto de datas
+- Sistema de limites de IA por plano
+- Preços atualizados
 
 ### Versão 3.1.0 (Dezembro 2025)
 - Correção do contexto de datas no chatbot
 - Bug de acentuação corrigido
 
-## Roadmap de Alto Valor
+## Arquitectura
 
-### Fase 1: ✅ Correções Urgentes
-- [x] Service Worker
-- [x] Chatbot IA
-- [x] Sistema de limites
+```
+/app/
+├── Backend (*.js → salvar como *.gs)
+│   ├── Main.js          - Entrypoint, doGet, AI endpoint
+│   ├── DataService.js   - Dados, planos, features
+│   ├── AdminService.js  - Gestão multi-cliente ✨ NEW
+│   ├── AlertService.js  - Alertas automáticos ✨ NEW
+│   ├── CategorizationService.js - Categorização IA ✨ NEW
+│   ├── ImportService.js - Importação OFX/CSV ✨ NEW
+│   ├── ValidationService.js
+│   └── Config.js
+│
+├── Frontend (*.html)
+│   ├── index.html       - Página principal
+│   ├── styles.html      - CSS customizado
+│   ├── JS_Core.html     - Variáveis globais
+│   ├── JS_Alerts.html   - Alertas UI ✨ NEW
+│   ├── JS_Import.html   - Importação UI ✨ NEW
+│   ├── JS_ChatAI.html   - Chatbot
+│   ├── JS_Render.html   - Rendering
+│   └── ...
+│
+├── PWA
+│   ├── service-worker.html
+│   └── manifest (dinâmico)
+│
+└── Documentação (*.md)
+    ├── GUIA_MULTI_CLIENTE.md ✨ NEW
+    ├── ESTRUTURA_PLANILHA.md ✨ NEW
+    ├── ROADMAP_COMERCIAL.md ✨ NEW
+    └── ...
+```
 
-### Fase 2: Alertas Automáticos (Próximo)
-- [ ] Alerta de fluxo de caixa crítico
-- [ ] Alerta de inadimplência
-- [ ] Alerta de despesa anormal
-- [ ] Alerta de meta estourada
+## Schema da Base de Dados
 
-### Fase 3: Automação para Equipa
-- [ ] Importação automática OFX
-- [ ] Categorização inteligente com IA
-- [ ] Conciliação assistida
+### Planilha ADMIN_MASTER (Central)
+| Aba | Colunas |
+|-----|---------|
+| CLIENTES | client_id, nome, spreadsheet_id, plano, status, data_inicio, consultas_ia_mes, ultimo_acesso |
+| CONFIG_GLOBAL | chave, valor (API keys, limites) |
+| LOG_SISTEMA | timestamp, client_id, acao, detalhes |
 
-### Fase 4: Diferenciação Premium
-- [ ] Previsões de fluxo de caixa (30/60/90 dias)
-- [ ] Benchmarks do setor
-- [ ] Relatórios automáticos WhatsApp/Email
+### Planilha do Cliente
+| Aba | Colunas |
+|-----|---------|
+| CONFIG | Plano, Nome, CNPJ, AI_API_KEY |
+| CONTAS | ID, Nome, Tipo, Saldo, Icone |
+| TRANSACOES | Data, Tipo, Categoria, Subcategoria, Valor, Conta, Status, Descrição |
+| CATEGORIAS | Categoria, Grupo_DRE |
+| METAS | Categoria, Meta, Tipo |
+| REGRAS_CATEGORIZACAO | padrao, categoria, subcategoria, tipo ✨ NEW |
 
-## Dores Identificadas
+## Fluxos Implementados
 
-### Cliente Final (Empresário)
-1. Não sabe onde está vazando dinheiro
-2. Falta visibilidade do fluxo de caixa futuro
-3. Dificuldade em entender rentabilidade
+### 1. Multi-Cliente
+```
+URL: ?client=acme_001
+       ↓
+AdminService.getClientById()
+       ↓
+Valida status → ativo?
+       ↓
+Carrega spreadsheet_id do cliente
+       ↓
+Renderiza dashboard
+```
 
-### Equipa (Consultoria)
-1. 2h/semana por cliente em categorização manual
-2. Dados vêm de OFX, PDF, Excel
-3. Categorização é o maior consumidor de tempo
+### 2. Importação de Extrato
+```
+Upload OFX/CSV
+       ↓
+Parse automático
+       ↓
+Detecta duplicatas
+       ↓
+Categorização (regras → IA)
+       ↓
+Cria aba IMPORT_xxx
+       ↓
+Usuário revisa e aprova
+       ↓
+Transações salvas
+```
 
-## Schema da Base de Dados (Google Sheets)
+### 3. Alertas
+```
+Carrega dados
+       ↓
+AlertService.analyzeAndGenerateAlerts()
+       ↓
+Ordena por prioridade
+       ↓
+Renderiza no dashboard
+       ↓
+Usuário pode dispensar
+```
 
-| Tab | Colunas | Descrição |
-|-----|---------|-----------|
-| CONFIG | Plano, Nome Cliente, AI_API_KEY, AI_USAGE_YYYY-MM | Configuração |
-| CONTAS | ID, Name, Type, Balance, Icon | Contas bancárias |
-| TRANSACOES | Date, Type, Category, Value, Account, Status, Description | Movimentações |
-| CATEGORIAS | Category, DRE_Group | Mapeamento para DRE |
-| METAS | Category, Target, Type | Metas financeiras |
+## Roadmap
 
-## Notas Técnicas
+### ✅ Completo
+- Dashboard com KPIs
+- Sistema de planos (3 níveis)
+- Chatbot IA com contexto
+- PWA instalável
+- Multi-cliente centralizado
+- Alertas automáticos
+- Importação OFX/CSV
+- Categorização com IA
 
-1. **Google Apps Script**: Ficheiros `.js` devem ser `.gs` com ES5
-2. **Service Worker**: Servido via `ContentService.createTextOutput()`
-3. **Controle de IA**: Uso gravado na CONFIG como `AI_USAGE_YYYY-MM`
+### 🔜 Próximo
+- Previsão de fluxo de caixa (30/60/90 dias)
+- Notificações WhatsApp/Email
+- Benchmarks do setor
+- Relatórios automáticos
+
+### 📋 Backlog
+- IA conversacional (multi-turn)
+- Exportação PDF avançada
+- App mobile nativo
+- Integração com ERPs
+
+## Integrações
+
+| Serviço | Uso |
+|---------|-----|
+| OpenAI GPT-4o-mini | Chatbot, categorização |
+| Chart.js | Gráficos |
+| Tailwind CSS | Styling |
+| Lucide Icons | Ícones |
+
+## Documentação
+
+| Arquivo | Descrição |
+|---------|-----------|
+| `/app/docs/GUIA_MULTI_CLIENTE.md` | Setup multi-cliente |
+| `/app/docs/ESTRUTURA_PLANILHA.md` | Estrutura de abas |
+| `/app/ROADMAP_COMERCIAL.md` | Precificação e roadmap |
+| `/app/CHANGELOG.md` | Histórico de versões |
 
 ---
-*Última atualização: Dezembro 2025 - v3.2.0*
+*Última atualização: Dezembro 2025 - v3.3.0*
