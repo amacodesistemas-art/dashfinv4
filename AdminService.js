@@ -282,50 +282,87 @@ function setupAdminSpreadsheet(spreadsheetId) {
 
 // Função para criar estrutura da planilha admin
 function createAdminStructure() {
-  var ss = SpreadsheetApp.create('ADMIN_DASHBOARD_MASTER');
+  // Tenta usar a planilha ativa (se executar de dentro dela)
+  // ou cria uma nova
+  var ss;
+  try {
+    ss = SpreadsheetApp.getActiveSpreadsheet();
+    if (!ss) {
+      ss = SpreadsheetApp.create('ADMIN_DASHBOARD_MASTER');
+    }
+  } catch (e) {
+    ss = SpreadsheetApp.create('ADMIN_DASHBOARD_MASTER');
+  }
+  
   var spreadsheetId = ss.getId();
   
-  // Aba CLIENTES
-  var clientesSheet = ss.getSheetByName('Sheet1');
-  clientesSheet.setName('CLIENTES');
+  // Aba CLIENTES - usa a primeira aba existente ou cria
+  var sheets = ss.getSheets();
+  var clientesSheet = ss.getSheetByName('CLIENTES');
+  
+  if (!clientesSheet) {
+    if (sheets.length > 0 && sheets[0].getLastRow() <= 1) {
+      // Usa a primeira aba se estiver vazia
+      clientesSheet = sheets[0];
+      clientesSheet.setName('CLIENTES');
+    } else {
+      clientesSheet = ss.insertSheet('CLIENTES');
+    }
+  }
+  
+  // Limpa e configura CLIENTES
+  clientesSheet.clear();
   clientesSheet.appendRow([
     'client_id', 'nome', 'spreadsheet_id', 'plano', 'status', 
     'data_inicio', 'data_vencimento', 'consultas_ia_mes', 'ultimo_acesso'
   ]);
-  
-  // Formata cabeçalho
   clientesSheet.getRange(1, 1, 1, 9).setBackground('#3b82f6').setFontColor('#ffffff').setFontWeight('bold');
+  clientesSheet.setFrozenRows(1);
   
   // Aba CONFIG_GLOBAL
-  var configSheet = ss.insertSheet('CONFIG_GLOBAL');
+  var configSheet = ss.getSheetByName('CONFIG_GLOBAL');
+  if (!configSheet) {
+    configSheet = ss.insertSheet('CONFIG_GLOBAL');
+  }
+  configSheet.clear();
   configSheet.appendRow(['chave', 'valor']);
   configSheet.appendRow(['openai_api_key', '']);
   configSheet.appendRow(['limite_ia_basic', 0]);
   configSheet.appendRow(['limite_ia_professional', 30]);
   configSheet.appendRow(['limite_ia_enterprise', -1]);
   configSheet.appendRow(['email_admin', '']);
-  configSheet.appendRow(['versao_sistema', '3.2.0']);
+  configSheet.appendRow(['versao_sistema', '3.3.0']);
   configSheet.getRange(1, 1, 1, 2).setBackground('#10b981').setFontColor('#ffffff').setFontWeight('bold');
   
   // Aba LOG_SISTEMA
-  var logSheet = ss.insertSheet('LOG_SISTEMA');
+  var logSheet = ss.getSheetByName('LOG_SISTEMA');
+  if (!logSheet) {
+    logSheet = ss.insertSheet('LOG_SISTEMA');
+  }
+  logSheet.clear();
   logSheet.appendRow(['timestamp', 'client_id', 'acao', 'detalhes']);
   logSheet.getRange(1, 1, 1, 4).setBackground('#f59e0b').setFontColor('#ffffff').setFontWeight('bold');
   
   // Aba ALERTAS_PENDENTES
-  var alertasSheet = ss.insertSheet('ALERTAS_PENDENTES');
+  var alertasSheet = ss.getSheetByName('ALERTAS_PENDENTES');
+  if (!alertasSheet) {
+    alertasSheet = ss.insertSheet('ALERTAS_PENDENTES');
+  }
+  alertasSheet.clear();
   alertasSheet.appendRow(['timestamp', 'client_id', 'tipo', 'mensagem', 'valor', 'enviado']);
   alertasSheet.getRange(1, 1, 1, 6).setBackground('#ef4444').setFontColor('#ffffff').setFontWeight('bold');
   
-  // Configura o ID
+  // Configura o ID nas propriedades do script
   setupAdminSpreadsheet(spreadsheetId);
   
-  Logger.log('Planilha Admin criada: ' + spreadsheetId);
-  Logger.log('URL: ' + ss.getUrl());
+  Logger.log('✅ Planilha Admin configurada com sucesso!');
+  Logger.log('📋 ID: ' + spreadsheetId);
+  Logger.log('🔗 URL: ' + ss.getUrl());
   
   return {
     spreadsheetId: spreadsheetId,
-    url: ss.getUrl()
+    url: ss.getUrl(),
+    message: 'Estrutura criada com sucesso!'
   };
 }
 
