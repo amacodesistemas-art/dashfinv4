@@ -399,7 +399,7 @@ function callOpenAI(apiKey, prompt, maxTokens) {
   var url = 'https://api.openai.com/v1/chat/completions';
   
   var payload = {
-    model: 'gpt-4',
+    model: 'gpt-4o-mini',
     messages: [
       {
         role: 'system',
@@ -424,14 +424,37 @@ function callOpenAI(apiKey, prompt, maxTokens) {
     muteHttpExceptions: true
   };
   
-  var response = UrlFetchApp.fetch(url, options);
-  var json = JSON.parse(response.getContentText());
+  Logger.log('[AI Chat] Chamando OpenAI API...');
   
-  if (json.error) {
-    throw new Error('OpenAI Error: ' + json.error.message);
+  try {
+    var response = UrlFetchApp.fetch(url, options);
+    var responseCode = response.getResponseCode();
+    var responseText = response.getContentText();
+    
+    Logger.log('[AI Chat] Response Code: ' + responseCode);
+    
+    if (responseCode !== 200) {
+      Logger.log('[AI Chat] Erro na API: ' + responseText);
+      return 'Erro na API de IA (codigo ' + responseCode + '). Verifique sua API key.';
+    }
+    
+    var json = JSON.parse(responseText);
+    
+    if (json.error) {
+      Logger.log('[AI Chat] Erro OpenAI: ' + json.error.message);
+      return 'Erro OpenAI: ' + json.error.message;
+    }
+    
+    if (!json.choices || json.choices.length === 0) {
+      return 'Resposta vazia da IA. Tente novamente.';
+    }
+    
+    return json.choices[0].message.content.trim();
+    
+  } catch (e) {
+    Logger.log('[AI Chat] Excecao: ' + e.message);
+    return 'Erro ao conectar com IA: ' + e.message;
   }
-  
-  return json.choices[0].message.content.trim();
 }
 
 function testData() {
