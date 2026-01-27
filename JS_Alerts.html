@@ -1,0 +1,345 @@
+<script>
+// ===================================
+// COMPONENTE DE ALERTAS AUTOMÁTICOS
+// ===================================
+
+let ALERTS_DATA = [];
+let ALERTS_DISMISSED = [];
+
+// Carrega alertas do backend
+function loadAlerts() {
+    if (!GLOBAL_DATA) return;
+    
+    // Verifica se feature está disponível
+    if (!hasFeature('alerts') && !hasFeature('insights_basic')) {
+        return;
+    }
+    
+    try {
+        google.script.run
+            .withSuccessHandler(function(alerts) {
+                ALERTS_DATA = alerts || [];
+                renderAlertsPanel();
+            })
+            .withFailureHandler(function(error) {
+                console.error('[Alerts] Erro:', error);
+            })
+            .getAlerts(GLOBAL_DATA);
+    } catch (e) {
+        // Fallback para geração local
+        ALERTS_DATA = generateLocalAlerts();
+        renderAlertsPanel();
+    }
+}
+
+// Gera alertas localmente (fallback)
+function generateLocalAlerts() {
+    const alerts = [];
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const transactions = GLOBAL_DATA.transactions || [];
+    const accounts = GLOBAL_DATA.accounts || [];
+    
+    // 1. Inadimplência
+    let overdueCount = 0;
+    let overdueValue = 0;
+    
+    transactions.forEach(t => {
+        if (t.type === 'Entrada' && t.status !== 'Pago' && t.status !== 'Recebido') {
+            const tDate = parseDate(t.date);
+            if (tDate < today) {
+                overdueCount++;
+                overdueValue += t.value;
+            }
+        }
+    });
+    
+    if (overdueCount > 0) {
+        alerts.push({
+            type: 'inadimplencia',
+            priority: overdueValue > 10000 ? 'critical' : 'high',
+            title: '💰 Contas a Receber em Atraso',
+            message: `${overdueCount} fatura(s) totalizando ${formatCurrency(overdueValue)}`,
+            value: overdueValue,
+            action: 'Entre em contato com os clientes inadimplentes.',
+            icon: 'alert-circle',
+            style: {
+                bg: 'bg-red-50 dark:bg-red-900/20',
+                border: 'border-red-200 dark:border-red-800',
+                text: 'text-red-800 dark:text-red-200'
+            }
+        });
+    }
+    
+    // 2. Vencimentos Hoje
+    const dueToday = transactions.filter(t => {
+        return t.date === today.toISOString().split('T')[0] && 
+               t.status !== 'Pago' && t.status !== 'Concluído';
+    });
+    
+    if (dueToday.length > 0) {
+        const totalDue = dueToday.reduce((sum, t) => sum + t.value, 0);
+        alerts.push({
+            type: 'vencimento_hoje',
+            priority: 'high',
+            title: '📅 Vencimentos Hoje',
+            message: `${dueToday.length} conta(s) vencem hoje: ${formatCurrency(totalDue)}`,
+            value: totalDue,
+            action: 'Efetue os pagamentos para evitar juros.',
+            icon: 'calendar',
+            style: {
+                bg: 'bg-orange-50 dark:bg-orange-900/20',
+                border: 'border-orange-200 dark:border-orange-800',
+                text: 'text-orange-800 dark:text-orange-200'
+            }
+        });
+    }
+    
+    // 3. Saldo Negativo
+    accounts.forEach(acc => {
+        if (acc.balance < 0) {
+            alerts.push({
+                type: 'saldo_baixo',
+                priority: 'critical',
+                title: '🔴 Conta Negativa',
+                message: `${acc.name} com saldo ${formatCurrency(acc.balance)}`,
+                value: acc.balance,
+                action: 'Transfira recursos ou negocie com o banco.',
+                icon: 'alert-triangle',
+                style: {
+                    bg: 'bg-red-50 dark:bg-red-900/20',
+                    border: 'border-red-200 dark:border-red-800',
+                    text: 'text-red-800 dark:text-red-200'
+                }
+            });
+        }
+    });
+    
+    return alerts;
+}
+
+// Renderiza painel de alertas
+function renderAlertsPanel() {
+    // Filtra alertas não dispensados
+    const activeAlerts = ALERTS_DATA.filter(a => !ALERTS_DISMISSED.includes(a.type + '_' + a.message));
+    
+    if (activeAlerts.length === 0) return '';
+    
+    const criticalAlerts = activeAlerts.filter(a => a.priority === 'critical');
+    const otherAlerts = activeAlerts.filter(a => a.priority !== 'critical');
+    
+    let html = `
+        <div id="alerts-panel" class="space-y-3 mb-6 animate-fadeIn">
+            <div class="flex items-center justify-between">
+                <h3 class="font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                    <i data-lucide="bell" class="w-5 h-5 text-red-500"></i>
+                    Alertas (${activeAlerts.length})
+                </h3>
+                ${activeAlerts.length > 1 ? `
+                    <button onclick="dismissAllAlerts()" class="text-xs text-slate-500 hover:text-slate-700 dark:hover:text-slate-300">
+                        Dispensar todos
+                    </button>
+                ` : ''}
+            </div>
+    `;
+    
+    // Alertas críticos primeiro
+    criticalAlerts.forEach((alert, index) => {
+        html += renderAlertCard(alert, index);
+    });
+    
+    // Outros alertas
+    otherAlerts.slice(0, 3).forEach((alert, index) => {
+        html += renderAlertCard(alert, index + criticalAlerts.length);
+    });
+    
+    // Mostrar mais
+    if (otherAlerts.length > 3) {
+        html += `
+            <button onclick="showAllAlerts()" class="w-full p-2 text-center text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400">
+                Ver mais ${otherAlerts.length - 3} alerta(s)...
+            </button>
+        `;
+    }
+    
+    html += '</div>';
+    
+    // Insere no DOM
+    const appContent = document.getElementById('app');
+    const firstChild = appContent.firstElementChild;
+    
+    // Remove painel anterior se existir
+    const existingPanel = document.getElementById('alerts-panel');
+    if (existingPanel) existingPanel.remove();
+    
+    // Insere após o header
+    const header = appContent.querySelector('.bg-white.dark\\:bg-slate-800.p-6.rounded-2xl');
+    if (header) {
+        header.insertAdjacentHTML('afterend', html);
+        lucide.createIcons();
+    }
+}
+
+// Renderiza card de alerta individual
+function renderAlertCard(alert, index) {
+    const alertId = alert.type + '_' + alert.message;
+    
+    return `
+        <div class="p-4 rounded-xl border ${alert.style.bg} ${alert.style.border} ${alert.style.text} transition-all hover:shadow-md" data-alert-id="${alertId}">
+            <div class="flex items-start justify-between gap-4">
+                <div class="flex items-start gap-3">
+                    <div class="p-2 rounded-lg ${alert.priority === 'critical' ? 'bg-red-100 dark:bg-red-900' : 'bg-orange-100 dark:bg-orange-900'}">
+                        <i data-lucide="${alert.icon}" class="w-5 h-5"></i>
+                    </div>
+                    <div>
+                        <h4 class="font-bold">${alert.title}</h4>
+                        <p class="text-sm opacity-90">${alert.message}</p>
+                        ${alert.action ? `<p class="text-xs mt-2 opacity-75"><strong>Ação:</strong> ${alert.action}</p>` : ''}
+                    </div>
+                </div>
+                <button onclick="dismissAlert('${alertId}')" class="p-1 hover:bg-black/10 rounded transition-colors" title="Dispensar">
+                    <i data-lucide="x" class="w-4 h-4"></i>
+                </button>
+            </div>
+        </div>
+    `;
+}
+
+// Dispensa alerta individual
+function dismissAlert(alertId) {
+    ALERTS_DISMISSED.push(alertId);
+    
+    // Salva no localStorage
+    localStorage.setItem('dismissed_alerts', JSON.stringify(ALERTS_DISMISSED));
+    
+    // Remove do DOM com animação
+    const alertEl = document.querySelector(`[data-alert-id="${alertId}"]`);
+    if (alertEl) {
+        alertEl.style.opacity = '0';
+        alertEl.style.transform = 'translateX(-20px)';
+        setTimeout(() => {
+            alertEl.remove();
+            
+            // Atualiza contador
+            const panel = document.getElementById('alerts-panel');
+            const remaining = panel ? panel.querySelectorAll('[data-alert-id]').length : 0;
+            
+            if (remaining === 0 && panel) {
+                panel.remove();
+            }
+        }, 300);
+    }
+    
+    showToast('Alerta dispensado', 'info', 2000);
+}
+
+// Dispensa todos os alertas
+function dismissAllAlerts() {
+    ALERTS_DATA.forEach(alert => {
+        const alertId = alert.type + '_' + alert.message;
+        if (!ALERTS_DISMISSED.includes(alertId)) {
+            ALERTS_DISMISSED.push(alertId);
+        }
+    });
+    
+    localStorage.setItem('dismissed_alerts', JSON.stringify(ALERTS_DISMISSED));
+    
+    const panel = document.getElementById('alerts-panel');
+    if (panel) {
+        panel.style.opacity = '0';
+        setTimeout(() => panel.remove(), 300);
+    }
+    
+    showToast('Todos os alertas dispensados', 'info', 2000);
+}
+
+// Mostra todos os alertas em modal
+function showAllAlerts() {
+    const activeAlerts = ALERTS_DATA.filter(a => !ALERTS_DISMISSED.includes(a.type + '_' + a.message));
+    
+    let modalContent = `
+        <div class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onclick="closeAlertsModal(event)">
+            <div class="bg-white dark:bg-slate-800 rounded-2xl max-w-2xl w-full max-h-[80vh] overflow-hidden" onclick="event.stopPropagation()">
+                <div class="p-6 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                    <h2 class="text-xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                        <i data-lucide="bell" class="w-6 h-6 text-red-500"></i>
+                        Todos os Alertas (${activeAlerts.length})
+                    </h2>
+                    <button onclick="closeAlertsModal()" class="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors">
+                        <i data-lucide="x" class="w-5 h-5"></i>
+                    </button>
+                </div>
+                <div class="p-6 space-y-3 overflow-y-auto max-h-[60vh]">
+    `;
+    
+    activeAlerts.forEach((alert, index) => {
+        modalContent += renderAlertCard(alert, index);
+    });
+    
+    modalContent += `
+                </div>
+            </div>
+        </div>
+    `;
+    
+    const modal = document.createElement('div');
+    modal.id = 'alerts-modal';
+    modal.innerHTML = modalContent;
+    document.body.appendChild(modal);
+    lucide.createIcons();
+}
+
+// Fecha modal de alertas
+function closeAlertsModal(event) {
+    if (event && event.target !== event.currentTarget) return;
+    
+    const modal = document.getElementById('alerts-modal');
+    if (modal) {
+        modal.style.opacity = '0';
+        setTimeout(() => modal.remove(), 200);
+    }
+}
+
+// Inicializa alertas dispensados do localStorage
+function initAlerts() {
+    const saved = localStorage.getItem('dismissed_alerts');
+    if (saved) {
+        try {
+            ALERTS_DISMISSED = JSON.parse(saved);
+        } catch (e) {
+            ALERTS_DISMISSED = [];
+        }
+    }
+    
+    // Limpa alertas dispensados com mais de 24h (reseta diariamente)
+    const lastReset = localStorage.getItem('alerts_last_reset');
+    const now = new Date().toDateString();
+    
+    if (lastReset !== now) {
+        ALERTS_DISMISSED = [];
+        localStorage.setItem('dismissed_alerts', '[]');
+        localStorage.setItem('alerts_last_reset', now);
+    }
+}
+
+// Carrega alertas após dados carregados
+document.addEventListener('DOMContentLoaded', function() {
+    initAlerts();
+});
+</script>
+
+<style>
+#alerts-panel [data-alert-id] {
+    transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+#alerts-modal {
+    animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+</style>
