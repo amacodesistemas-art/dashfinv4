@@ -4,6 +4,7 @@
     // ===================================
     let GLOBAL_DATA = null;
     let CURRENT_VIEW = 'overview';
+    let CURRENT_TAB = 'dashboard'; // 'dashboard', 'accounts', 'dre'
     let SELECTED_ACCOUNT = null;
     let SELECTED_SUBCATEGORIES = [];
     let CHARTS_INSTANCES = {};
@@ -36,6 +37,17 @@ let ADVANCED_FILTERS = {
         minValue: null,
         maxValue: null
     };
+    
+    // Função para trocar de aba
+    function switchTab(tab) {
+        CURRENT_TAB = tab;
+        if (tab === 'dre') {
+            IS_DRE_MODE = true;
+        } else {
+            IS_DRE_MODE = false;
+        }
+        renderApp();
+    }
 
     // ===================================
     // UTILITÁRIOS E FORMATADORES
