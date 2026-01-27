@@ -9,6 +9,19 @@ O utilizador pretende construir um sistema de dashboard financeiro B2B profissio
 
 Os clientes têm uma vista somente-leitura do dashboard. A equipa do utilizador gere toda a entrada de dados através do Google Sheets.
 
+## Modelo de Negócio
+
+### Estrutura de Planos
+
+| Plano | Preço | IA | DRE | Alertas |
+|-------|-------|-----|-----|---------|
+| Básico | R$ 297/mês | ❌ | ❌ | ❌ |
+| Profissional | R$ 597/mês | 30/mês | ✅ | ❌ |
+| Enterprise | R$ 1.297/mês | ∞ | ✅ | ✅ |
+
+### Custo de IA por Consulta
+~R$ 0,003 (insignificante) - usando GPT-4o-mini
+
 ## Requisitos do Produto
 
 ### Funcionalidades Core
@@ -18,6 +31,7 @@ Os clientes têm uma vista somente-leitura do dashboard. A equipa do utilizador 
 - [x] Capacidades avançadas de filtragem
 - [x] Acompanhamento de metas
 - [x] Páginas de detalhe de contas
+- [x] Sistema de limites de IA por plano
 
 ### Funcionalidades UX
 - [x] Tema Escuro/Claro
@@ -26,110 +40,86 @@ Os clientes têm uma vista somente-leitura do dashboard. A equipa do utilizador 
 - [x] Micro-interações
 
 ### Sistema de Planos Modulares
-- [x] Plano Básico
-- [x] Plano Intermediário  
-- [x] Plano Avançado (com IA e DRE)
+- [x] Plano Básico (R$ 297)
+- [x] Plano Profissional (R$ 597) - com 30 consultas IA/mês
+- [x] Plano Enterprise (R$ 1.297) - IA ilimitada
 
-### Chatbot IA (Plano Avançado)
+### Chatbot IA
 - [x] Interface de chat integrada
 - [x] Respostas baseadas em dados financeiros reais
-- [x] Contexto sensível ao período filtrado ✅ CORRIGIDO
-
-### PWA
-- [x] Service Worker para cache
-- [x] Instalável no ecrã inicial
-- [x] Funcionalidade offline parcial
+- [x] Contexto sensível ao período filtrado ✅
+- [x] Controle de limites por plano ✅
+- [x] Contador de uso mensal ✅
 
 ## O Que Foi Implementado
 
+### Versão 3.2.0 (Dezembro 2025)
+- **Service Worker corrigido**: Agora usa `ContentService` para MIME type correto
+- **Chatbot IA melhorado**:
+  - Modelo atualizado para `gpt-4o-mini` (mais rápido e económico)
+  - Tratamento de erros robusto
+  - Logging detalhado para debug
+- **Sistema de limites de IA**:
+  - Controle mensal de consultas por plano
+  - Contador automático na planilha CONFIG
+  - Mensagem de limite atingido
+  - Contador de consultas restantes na resposta
+- **Preços atualizados** para comercialização
+
 ### Versão 3.1.0 (Dezembro 2025)
-- **Correção do Chatbot IA**: O chatbot agora respeita os filtros de data selecionados
-  - Parsing de datas corrigido com horas definidas
-  - Filtragem de transações corrigida
-  - Bug de acentuação `'Saida'` → `'Saída'` corrigido
-  - Logging para debug adicionado
+- Correção do contexto de datas no chatbot
+- Bug de acentuação corrigido
 
-### Versão 3.0.0 (Janeiro 2025)
-- Sistema de atalhos de teclado
-- Onboarding interativo
-- Análise inteligente aprimorada (10 tipos)
-- Indicadores de status melhorados
-- Documentação completa
+## Roadmap de Alto Valor
 
-## Arquitectura
+### Fase 1: ✅ Correções Urgentes
+- [x] Service Worker
+- [x] Chatbot IA
+- [x] Sistema de limites
 
-```
-/app/
-├── *.gs (Backend - Google Apps Script)
-│   ├── Main.gs (Entrypoint, doGet, AI endpoint)
-│   ├── DataService.gs (Data fetching, Plan logic)
-│   ├── ValidationService.gs (Data validation)
-│   └── Config.gs (ID da planilha)
-│
-├── *.html (Frontend Structure & JS Modules)
-│   ├── index.html (Página principal)
-│   ├── styles.html (CSS customizado)
-│   ├── service-worker.html (PWA logic)
-│   ├── JS_ChatAI.html (Chatbot UI/Logic)
-│   ├── JS_Core.html (Variáveis globais)
-│   ├── JS_Render.html (UI Rendering)
-│   ├── JS_Logic.html (Lógica de negócio)
-│   ├── JS_Events.html (Eventos e interação)
-│   ├── JS_FeatureFlags.html (Frontend plan checks)
-│   └── ...
-│
-└── *.md (Documentação)
-    ├── README.md
-    ├── CHANGELOG.md
-    └── ...
-```
+### Fase 2: Alertas Automáticos (Próximo)
+- [ ] Alerta de fluxo de caixa crítico
+- [ ] Alerta de inadimplência
+- [ ] Alerta de despesa anormal
+- [ ] Alerta de meta estourada
+
+### Fase 3: Automação para Equipa
+- [ ] Importação automática OFX
+- [ ] Categorização inteligente com IA
+- [ ] Conciliação assistida
+
+### Fase 4: Diferenciação Premium
+- [ ] Previsões de fluxo de caixa (30/60/90 dias)
+- [ ] Benchmarks do setor
+- [ ] Relatórios automáticos WhatsApp/Email
+
+## Dores Identificadas
+
+### Cliente Final (Empresário)
+1. Não sabe onde está vazando dinheiro
+2. Falta visibilidade do fluxo de caixa futuro
+3. Dificuldade em entender rentabilidade
+
+### Equipa (Consultoria)
+1. 2h/semana por cliente em categorização manual
+2. Dados vêm de OFX, PDF, Excel
+3. Categorização é o maior consumidor de tempo
 
 ## Schema da Base de Dados (Google Sheets)
 
 | Tab | Colunas | Descrição |
 |-----|---------|-----------|
-| CONFIG | Plano, Nome Cliente, CNPJ, AI_API_KEY | Configuração do cliente |
+| CONFIG | Plano, Nome Cliente, AI_API_KEY, AI_USAGE_YYYY-MM | Configuração |
 | CONTAS | ID, Name, Type, Balance, Icon | Contas bancárias |
-| TRANSACOES | Date, Type, Category, Subcategory, Value, Account, Status, Description, Cost Center | Movimentações |
+| TRANSACOES | Date, Type, Category, Value, Account, Status, Description | Movimentações |
 | CATEGORIAS | Category, DRE_Group | Mapeamento para DRE |
 | METAS | Category, Target, Type | Metas financeiras |
 
-## Endpoints/Funções Principais
+## Notas Técnicas
 
-| Função | Descrição |
-|--------|-----------|
-| `doGet(e)` | Entrypoint - serve HTML, SW ou manifest |
-| `getClientData()` | Retorna dados iniciais do dashboard |
-| `refreshData()` | Atualiza dados do cache |
-| `askAIFinancialQuestion(question, context)` | Processa pergunta do chatbot |
-
-## Tarefas Pendentes
-
-### P1 - Próximas Tarefas
-- [ ] Ecrã de Detalhes da Conta (vista ao clicar numa conta)
-- [ ] Classificação Automática de Dados (regras automáticas)
-
-### P2 - Futuras
-- [ ] Exportação para PDF melhorada
-- [ ] Atalhos de teclado completos
-- [ ] IA conversacional (multi-turn)
-
-## Integrações de Terceiros
-
-- **Chart.js**: Visualização de dados
-- **Tailwind CSS**: Styling via CDN
-- **Lucide Icons**: Ícones
-- **OpenAI API**: Chatbot IA (requer API key na CONFIG)
-
-## Notas Técnicas Importantes
-
-1. **Google Apps Script**: Todos os ficheiros `.js` backend devem ser salvos como `.gs` e usar JavaScript ES5 compatível (sem const/let, arrow functions limitadas).
-
-2. **Service Worker**: O ficheiro é servido como HTML com MimeType.JAVASCRIPT via `Main.gs`. Não alterar este padrão.
-
-3. **Planos**: A visibilidade de funcionalidades é controlada pelo valor `Plano` na tab CONFIG do Google Sheets.
-
-4. **Idioma**: Interface e comunicação em Português (PT-BR).
+1. **Google Apps Script**: Ficheiros `.js` devem ser `.gs` com ES5
+2. **Service Worker**: Servido via `ContentService.createTextOutput()`
+3. **Controle de IA**: Uso gravado na CONFIG como `AI_USAGE_YYYY-MM`
 
 ---
-*Última atualização: Dezembro 2025*
+*Última atualização: Dezembro 2025 - v3.2.0*
