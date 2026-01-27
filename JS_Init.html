@@ -146,6 +146,16 @@
                      if (typeof initChat === 'function') {
                          initChat();
                      }
+                     
+                     // Carrega alertas
+                     if (typeof loadAlerts === 'function') {
+                         loadAlerts();
+                     }
+                     
+                     // Adiciona botão de importação
+                     if (typeof addImportButton === 'function') {
+                         addImportButton();
+                     }
                  }, 1500);
                  
                  // Inicia onboarding se necessário (após 1 segundo)
