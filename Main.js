@@ -41,6 +41,31 @@ function doGet(e) {
       .setMimeType(ContentService.MimeType.JSON);
   }
   
+  // Verifica modo multi-cliente
+  var clientId = e.parameter ? e.parameter.client : null;
+  
+  if (clientId && typeof AdminService !== 'undefined' && AdminService.isMultiClientMode()) {
+    // Valida cliente
+    var client = AdminService.getClientById(clientId);
+    
+    if (!client) {
+      return HtmlService.createHtmlOutput('<h1>Cliente não encontrado</h1><p>Verifique a URL de acesso.</p>');
+    }
+    
+    if (client.error) {
+      return HtmlService.createHtmlOutput('<h1>Acesso Bloqueado</h1><p>' + client.error + '</p>');
+    }
+    
+    // Registra acesso
+    AdminService.updateLastAccess(clientId);
+    AdminService.log(clientId, 'login', 'Acesso ao dashboard');
+    
+    // Guarda client ID para uso nas funções
+    var props = PropertiesService.getUserProperties();
+    props.setProperty('CURRENT_CLIENT_ID', clientId);
+    props.setProperty('CURRENT_SPREADSHEET_ID', client.spreadsheet_id);
+  }
+  
   // Retorna página principal
   return HtmlService.createTemplateFromFile('index')
     .evaluate()
