@@ -26,6 +26,19 @@ Os clientes têm uma vista somente-leitura do dashboard. A equipa do utilizador 
 
 ### Versão 3.3.0 (Dezembro 2025) ✅ ATUAL
 
+#### Visão por Contas Bancárias (`JS_Accounts.html`) ✨ NEW
+- Navegação por abas: Dashboard | Contas | DRE
+- Cards visuais de cada conta com:
+  - Saldo atual e projetado
+  - Entradas e saídas do período
+  - Últimas transações
+  - Barra de progresso entradas vs saídas
+- Modo lista para visão resumida
+- Modal de detalhe por conta com:
+  - Extrato completo filtrado
+  - Análise por categoria
+  - Opção de filtrar dashboard pela conta
+
 #### Arquitetura Multi-Cliente
 - Sistema centralizado para gerenciar 10, 100+ clientes
 - URL única com parâmetro `?client=ID`
