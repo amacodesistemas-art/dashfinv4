@@ -5,9 +5,9 @@
 function doGet(e) {
   // Verifica se é requisição para service worker
   if (e.parameter && e.parameter.file === 'sw') {
-    return HtmlService.createHtmlOutput(
-      include('service-worker')
-    ).setMimeType(ContentService.MimeType.JAVASCRIPT);
+    var swContent = HtmlService.createHtmlOutputFromFile('service-worker').getContent();
+    return ContentService.createTextOutput(swContent)
+      .setMimeType(ContentService.MimeType.JAVASCRIPT);
   }
   
   // Verifica se é requisição para manifest
