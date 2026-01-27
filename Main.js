@@ -208,6 +208,12 @@ function askAIFinancialQuestion(question, contextData) {
     
     // Chama OpenAI
     var response = callOpenAI(apiKey, prompt, 400);
+    
+    // Adiciona info de uso restante se não for ilimitado
+    if (usageCheck.remaining !== 'ilimitado' && typeof usageCheck.remaining === 'number') {
+      response += '\n\n---\n📊 _Consultas restantes este mês: ' + usageCheck.remaining + '/' + usageCheck.limit + '_';
+    }
+    
     return response;
     
   } catch (error) {
