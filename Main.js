@@ -53,6 +53,71 @@ function include(filename) {
   return HtmlService.createHtmlOutputFromFile(filename).getContent();
 }
 
+// Verifica e controla uso de IA por plano
+function checkAIUsageLimit(ss, configSheet) {
+  var clientPlan = DataService.getClientPlan(ss);
+  var planConfig = DataService.PLAN_FEATURES[clientPlan];
+  
+  if (!planConfig) {
+    return { allowed: false, message: 'Plano nao identificado.' };
+  }
+  
+  var limit = planConfig.ai_queries_limit;
+  
+  // Se limite é 0, não tem acesso
+  if (limit === 0) {
+    return { 
+      allowed: false, 
+      message: 'O chatbot de IA nao esta disponivel no plano ' + planConfig.name + '. Faca upgrade para o plano Profissional ou Enterprise.' 
+    };
+  }
+  
+  // Se limite é -1, é ilimitado
+  if (limit === -1) {
+    return { allowed: true, remaining: 'ilimitado' };
+  }
+  
+  // Verifica uso do mês atual
+  var currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM
+  var usageKey = 'AI_USAGE_' + currentMonth;
+  
+  var data = configSheet.getRange('A:B').getValues();
+  var usageRow = -1;
+  var currentUsage = 0;
+  
+  for (var i = 0; i < data.length; i++) {
+    if (String(data[i][0]).trim() === usageKey) {
+      usageRow = i + 1;
+      currentUsage = parseInt(data[i][1]) || 0;
+      break;
+    }
+  }
+  
+  if (currentUsage >= limit) {
+    return { 
+      allowed: false, 
+      message: 'Voce atingiu o limite de ' + limit + ' consultas de IA este mes. O limite sera renovado no proximo mes, ou faca upgrade para o plano Enterprise para consultas ilimitadas.',
+      remaining: 0
+    };
+  }
+  
+  // Incrementa uso
+  var newUsage = currentUsage + 1;
+  if (usageRow > 0) {
+    configSheet.getRange(usageRow, 2).setValue(newUsage);
+  } else {
+    var lastRow = configSheet.getLastRow();
+    configSheet.getRange(lastRow + 1, 1, 1, 2).setValues([[usageKey, newUsage]]);
+  }
+  
+  return { 
+    allowed: true, 
+    remaining: limit - newUsage,
+    used: newUsage,
+    limit: limit
+  };
+}
+
 // Função para processar perguntas do chatbot de IA
 function askAIFinancialQuestion(question, contextData) {
   try {
@@ -62,6 +127,12 @@ function askAIFinancialQuestion(question, contextData) {
     
     if (!configSheet) {
       return 'Desculpe, nao consegui acessar as configuracoes.';
+    }
+    
+    // Verifica limite de uso de IA
+    var usageCheck = checkAIUsageLimit(ss, configSheet);
+    if (!usageCheck.allowed) {
+      return usageCheck.message;
     }
     
     // Busca API key
