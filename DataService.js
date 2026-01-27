@@ -7,32 +7,35 @@ const DataService = {
   // Sistema de Planos integrado
   PLANS: {
     BASIC: 'basic',
-    INTERMEDIATE: 'intermediate',
-    ADVANCED: 'advanced'
+    PROFESSIONAL: 'professional',
+    ENTERPRISE: 'enterprise'
   },
   
   PLAN_FEATURES: {
     'basic': {
       name: 'Básico',
-      price: 'R$ 97/mês',
+      price: 'R$ 297/mês',
+      ai_queries_limit: 0, // Sem IA
       features: {
         dashboard: true,
         filters: true,
         export_csv: true,
-        export_pdf: true,
+        export_pdf: false,
         charts: true,
         goals: true,
         accounts: true,
         insights_basic: true,
         dre: false,
-        ai_classification: false,
         ai_insights: false,
-        predictive_analytics: false
+        alerts: false,
+        predictive_analytics: false,
+        whatsapp_reports: false
       }
     },
-    'intermediate': {
-      name: 'Intermediário',
-      price: 'R$ 197/mês',
+    'professional': {
+      name: 'Profissional',
+      price: 'R$ 597/mês',
+      ai_queries_limit: 30, // 30 consultas/mês
       features: {
         dashboard: true,
         filters: true,
@@ -43,29 +46,55 @@ const DataService = {
         accounts: true,
         insights_basic: true,
         dre: true,
-        ai_classification: false,
-        ai_insights: false,
-        predictive_analytics: false
+        ai_insights: true,
+        alerts: false,
+        predictive_analytics: false,
+        whatsapp_reports: false
+      }
+    },
+    'enterprise': {
+      name: 'Enterprise',
+      price: 'R$ 1.297/mês',
+      ai_queries_limit: -1, // Ilimitado
+      features: {
+        dashboard: true,
+        filters: true,
+        export_csv: true,
+        export_pdf: true,
+        charts: true,
+        goals: true,
+        accounts: true,
+        insights_basic: true,
+        dre: true,
+        ai_insights: true,
+        alerts: true,
+        predictive_analytics: true,
+        whatsapp_reports: true,
+        priority_support: true,
+        custom_reports: true,
+        benchmarks: true
+      }
+    },
+    // Aliases para compatibilidade com versões anteriores
+    'intermediate': {
+      name: 'Profissional',
+      price: 'R$ 597/mês',
+      ai_queries_limit: 30,
+      features: {
+        dashboard: true, filters: true, export_csv: true, export_pdf: true,
+        charts: true, goals: true, accounts: true, insights_basic: true,
+        dre: true, ai_insights: true, alerts: false, predictive_analytics: false
       }
     },
     'advanced': {
-      name: 'Avançado',
-      price: 'R$ 397/mês',
+      name: 'Enterprise',
+      price: 'R$ 1.297/mês',
+      ai_queries_limit: -1,
       features: {
-        dashboard: true,
-        filters: true,
-        export_csv: true,
-        export_pdf: true,
-        charts: true,
-        goals: true,
-        accounts: true,
-        insights_basic: true,
-        dre: true,
-        ai_classification: true,
-        ai_insights: true,
-        predictive_analytics: true,
-        priority_support: true,
-        custom_reports: true
+        dashboard: true, filters: true, export_csv: true, export_pdf: true,
+        charts: true, goals: true, accounts: true, insights_basic: true,
+        dre: true, ai_insights: true, alerts: true, predictive_analytics: true,
+        whatsapp_reports: true, priority_support: true
       }
     }
   },
