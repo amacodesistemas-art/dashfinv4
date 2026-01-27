@@ -1,0 +1,417 @@
+<script>
+// ===================================
+// COMPONENTE DE IMPORTAÇÃO DE EXTRATOS
+// ===================================
+
+let IMPORT_STATE = {
+    file: null,
+    type: null,
+    accountId: null,
+    preview: []
+};
+
+// Abre modal de importação
+function openImportModal() {
+    const accounts = GLOBAL_DATA.accounts || [];
+    
+    const modalHtml = `
+        <div id="import-modal" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onclick="closeImportModal(event)">
+            <div class="bg-white dark:bg-slate-800 rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden" onclick="event.stopPropagation()">
+                
+                <!-- Header -->
+                <div class="p-6 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                    <h2 class="text-xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                        <i data-lucide="upload" class="w-6 h-6 text-blue-500"></i>
+                        Importar Extrato
+                    </h2>
+                    <button onclick="closeImportModal()" class="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors">
+                        <i data-lucide="x" class="w-5 h-5"></i>
+                    </button>
+                </div>
+                
+                <!-- Conteúdo -->
+                <div class="p-6 space-y-6 overflow-y-auto max-h-[70vh]">
+                    
+                    <!-- Step 1: Selecionar Conta -->
+                    <div class="space-y-2">
+                        <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">
+                            1. Selecione a Conta Bancária
+                        </label>
+                        <select id="import-account" onchange="updateImportAccount(this.value)" 
+                                class="w-full p-3 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-800 dark:text-white">
+                            <option value="">Selecione...</option>
+                            ${accounts.map(acc => `<option value="${acc.id}">${acc.icon} ${acc.name}</option>`).join('')}
+                        </select>
+                    </div>
+                    
+                    <!-- Step 2: Upload de Arquivo -->
+                    <div class="space-y-2">
+                        <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">
+                            2. Selecione o Arquivo (OFX ou CSV)
+                        </label>
+                        <div id="import-dropzone" 
+                             class="border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-xl p-8 text-center cursor-pointer hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all"
+                             ondrop="handleFileDrop(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)"
+                             onclick="document.getElementById('import-file-input').click()">
+                            <input type="file" id="import-file-input" accept=".ofx,.csv,.txt" onchange="handleFileSelect(event)" class="hidden">
+                            <i data-lucide="upload-cloud" class="w-12 h-12 mx-auto text-slate-400 mb-4"></i>
+                            <p class="text-slate-600 dark:text-slate-400 font-medium">
+                                Arraste o arquivo aqui ou clique para selecionar
+                            </p>
+                            <p class="text-sm text-slate-400 mt-2">
+                                Formatos aceitos: OFX, CSV
+                            </p>
+                        </div>
+                    </div>
+                    
+                    <!-- Preview do arquivo -->
+                    <div id="import-preview" class="hidden space-y-4">
+                        <div class="flex items-center justify-between p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+                            <div class="flex items-center gap-3">
+                                <i data-lucide="file-check" class="w-6 h-6 text-green-600"></i>
+                                <div>
+                                    <p class="font-medium text-green-800 dark:text-green-200" id="import-filename">arquivo.ofx</p>
+                                    <p class="text-sm text-green-600 dark:text-green-400" id="import-file-info">0 transações encontradas</p>
+                                </div>
+                            </div>
+                            <button onclick="clearImportFile()" class="p-2 hover:bg-green-100 dark:hover:bg-green-800 rounded-lg transition-colors">
+                                <i data-lucide="x" class="w-4 h-4 text-green-600"></i>
+                            </button>
+                        </div>
+                        
+                        <!-- Configuração CSV (se aplicável) -->
+                        <div id="csv-config" class="hidden p-4 bg-slate-50 dark:bg-slate-700 rounded-lg space-y-3">
+                            <h4 class="font-medium text-slate-700 dark:text-slate-300">Configuração do CSV</h4>
+                            <div class="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label class="text-xs text-slate-500">Separador</label>
+                                    <select id="csv-separator" class="w-full p-2 border rounded text-sm">
+                                        <option value=";">Ponto e vírgula (;)</option>
+                                        <option value=",">Vírgula (,)</option>
+                                        <option value="\t">Tab</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="text-xs text-slate-500">Formato de Data</label>
+                                    <select id="csv-date-format" class="w-full p-2 border rounded text-sm">
+                                        <option value="DD/MM/YYYY">DD/MM/YYYY</option>
+                                        <option value="YYYY-MM-DD">YYYY-MM-DD</option>
+                                        <option value="MM/DD/YYYY">MM/DD/YYYY</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Resumo -->
+                        <div id="import-summary" class="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                            <h4 class="font-medium text-blue-800 dark:text-blue-200 mb-2">Resumo da Importação</h4>
+                            <div class="grid grid-cols-3 gap-4 text-center">
+                                <div>
+                                    <p class="text-2xl font-bold text-blue-600" id="import-total">0</p>
+                                    <p class="text-xs text-blue-500">Total</p>
+                                </div>
+                                <div>
+                                    <p class="text-2xl font-bold text-green-600" id="import-categorized">0</p>
+                                    <p class="text-xs text-green-500">Categorizados</p>
+                                </div>
+                                <div>
+                                    <p class="text-2xl font-bold text-orange-600" id="import-pending">0</p>
+                                    <p class="text-xs text-orange-500">Para Revisar</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                </div>
+                
+                <!-- Footer -->
+                <div class="p-6 border-t border-slate-200 dark:border-slate-700 flex justify-end gap-3">
+                    <button onclick="closeImportModal()" class="px-4 py-2 text-slate-600 hover:text-slate-800 transition-colors">
+                        Cancelar
+                    </button>
+                    <button id="import-btn" onclick="processImport()" disabled
+                            class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2">
+                        <i data-lucide="upload" class="w-4 h-4"></i>
+                        Importar e Categorizar
+                    </button>
+                </div>
+                
+            </div>
+        </div>
+    `;
+    
+    const modal = document.createElement('div');
+    modal.innerHTML = modalHtml;
+    document.body.appendChild(modal.firstElementChild);
+    lucide.createIcons();
+}
+
+// Fecha modal de importação
+function closeImportModal(event) {
+    if (event && event.target !== event.currentTarget) return;
+    
+    const modal = document.getElementById('import-modal');
+    if (modal) {
+        modal.style.opacity = '0';
+        setTimeout(() => modal.remove(), 200);
+    }
+    
+    // Limpa estado
+    IMPORT_STATE = { file: null, type: null, accountId: null, preview: [] };
+}
+
+// Atualiza conta selecionada
+function updateImportAccount(accountId) {
+    IMPORT_STATE.accountId = accountId;
+    validateImportForm();
+}
+
+// Handle drag over
+function handleDragOver(event) {
+    event.preventDefault();
+    event.stopPropagation();
+    event.currentTarget.classList.add('border-blue-500', 'bg-blue-50', 'dark:bg-blue-900/20');
+}
+
+// Handle drag leave
+function handleDragLeave(event) {
+    event.preventDefault();
+    event.stopPropagation();
+    event.currentTarget.classList.remove('border-blue-500', 'bg-blue-50', 'dark:bg-blue-900/20');
+}
+
+// Handle file drop
+function handleFileDrop(event) {
+    event.preventDefault();
+    event.stopPropagation();
+    event.currentTarget.classList.remove('border-blue-500', 'bg-blue-50', 'dark:bg-blue-900/20');
+    
+    const files = event.dataTransfer.files;
+    if (files.length > 0) {
+        processSelectedFile(files[0]);
+    }
+}
+
+// Handle file select
+function handleFileSelect(event) {
+    const files = event.target.files;
+    if (files.length > 0) {
+        processSelectedFile(files[0]);
+    }
+}
+
+// Processa arquivo selecionado
+function processSelectedFile(file) {
+    const fileName = file.name.toLowerCase();
+    
+    if (!fileName.endsWith('.ofx') && !fileName.endsWith('.csv') && !fileName.endsWith('.txt')) {
+        showToast('Formato de arquivo não suportado. Use OFX ou CSV.', 'error');
+        return;
+    }
+    
+    IMPORT_STATE.file = file;
+    IMPORT_STATE.type = fileName.endsWith('.ofx') ? 'ofx' : 'csv';
+    
+    // Lê o arquivo
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        const content = e.target.result;
+        previewImportFile(content, file.name);
+    };
+    reader.readAsText(file);
+}
+
+// Preview do arquivo
+function previewImportFile(content, fileName) {
+    IMPORT_STATE.content = content;
+    
+    // Mostra preview
+    document.getElementById('import-preview').classList.remove('hidden');
+    document.getElementById('import-filename').textContent = fileName;
+    
+    // Mostra config CSV se necessário
+    if (IMPORT_STATE.type === 'csv') {
+        document.getElementById('csv-config').classList.remove('hidden');
+    } else {
+        document.getElementById('csv-config').classList.add('hidden');
+    }
+    
+    // Conta transações (estimativa)
+    let count = 0;
+    if (IMPORT_STATE.type === 'ofx') {
+        const matches = content.match(/<STMTTRN>/gi);
+        count = matches ? matches.length : 0;
+    } else {
+        const lines = content.split(/\r?\n/).filter(l => l.trim());
+        count = Math.max(0, lines.length - 1); // -1 para header
+    }
+    
+    document.getElementById('import-file-info').textContent = `${count} transações encontradas`;
+    document.getElementById('import-total').textContent = count;
+    
+    validateImportForm();
+}
+
+// Limpa arquivo
+function clearImportFile() {
+    IMPORT_STATE.file = null;
+    IMPORT_STATE.type = null;
+    IMPORT_STATE.content = null;
+    
+    document.getElementById('import-preview').classList.add('hidden');
+    document.getElementById('import-file-input').value = '';
+    
+    validateImportForm();
+}
+
+// Valida formulário
+function validateImportForm() {
+    const isValid = IMPORT_STATE.accountId && IMPORT_STATE.file;
+    document.getElementById('import-btn').disabled = !isValid;
+}
+
+// Processa importação
+function processImport() {
+    if (!IMPORT_STATE.accountId || !IMPORT_STATE.content) {
+        showToast('Selecione a conta e o arquivo', 'error');
+        return;
+    }
+    
+    const btn = document.getElementById('import-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<i data-lucide="loader" class="w-4 h-4 animate-spin"></i> Processando...';
+    lucide.createIcons();
+    
+    showToast('Processando arquivo... Isso pode levar alguns segundos.', 'info', 5000);
+    
+    if (IMPORT_STATE.type === 'ofx') {
+        google.script.run
+            .withSuccessHandler(handleImportResult)
+            .withFailureHandler(handleImportError)
+            .importOFXFile(IMPORT_STATE.content, IMPORT_STATE.accountId);
+    } else {
+        const config = {
+            separator: document.getElementById('csv-separator').value,
+            dateFormat: document.getElementById('csv-date-format').value,
+            dateColumn: 0,
+            descriptionColumn: 1,
+            valueColumn: 2,
+            skipHeader: true
+        };
+        
+        google.script.run
+            .withSuccessHandler(handleImportResult)
+            .withFailureHandler(handleImportError)
+            .importCSVFile(IMPORT_STATE.content, config, IMPORT_STATE.accountId);
+    }
+}
+
+// Handle resultado da importação
+function handleImportResult(result) {
+    if (!result.success) {
+        showToast('Erro na importação: ' + (result.error || 'Erro desconhecido'), 'error');
+        resetImportButton();
+        return;
+    }
+    
+    // Atualiza resumo
+    document.getElementById('import-total').textContent = result.total;
+    document.getElementById('import-categorized').textContent = result.categorization.byRule + result.categorization.byAI;
+    document.getElementById('import-pending').textContent = result.categorization.pending;
+    
+    // Mostra resultado
+    showToast(`✅ ${result.toReview} transações importadas! ${result.duplicates} duplicatas ignoradas.`, 'success', 5000);
+    
+    // Mostra link para revisão
+    if (result.reconciliationUrl) {
+        showReconciliationLink(result);
+    }
+    
+    closeImportModal();
+    refreshDashboard();
+}
+
+// Handle erro de importação
+function handleImportError(error) {
+    showToast('Erro na importação: ' + error.message, 'error');
+    resetImportButton();
+}
+
+// Reset botão de importar
+function resetImportButton() {
+    const btn = document.getElementById('import-btn');
+    if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = '<i data-lucide="upload" class="w-4 h-4"></i> Importar e Categorizar';
+        lucide.createIcons();
+    }
+}
+
+// Mostra link para reconciliação
+function showReconciliationLink(result) {
+    const toast = document.createElement('div');
+    toast.className = 'fixed bottom-4 left-4 right-4 md:left-auto md:right-4 md:w-96 bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-slate-200 dark:border-slate-700 p-4 z-50 animate-slideUp';
+    toast.innerHTML = `
+        <div class="flex items-start gap-3">
+            <div class="p-2 bg-blue-100 dark:bg-blue-900 rounded-lg">
+                <i data-lucide="file-spreadsheet" class="w-6 h-6 text-blue-600"></i>
+            </div>
+            <div class="flex-1">
+                <h4 class="font-bold text-slate-800 dark:text-white">Revisão Pendente</h4>
+                <p class="text-sm text-slate-600 dark:text-slate-400 mt-1">
+                    ${result.toReview} transações aguardam sua aprovação na planilha.
+                </p>
+                <div class="flex gap-2 mt-3">
+                    <a href="${result.reconciliationUrl}" target="_blank" 
+                       class="px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-1">
+                        <i data-lucide="external-link" class="w-4 h-4"></i>
+                        Abrir Planilha
+                    </a>
+                    <button onclick="this.closest('.fixed').remove()" class="px-3 py-1.5 text-slate-600 hover:text-slate-800 text-sm">
+                        Depois
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(toast);
+    lucide.createIcons();
+    
+    // Remove após 30 segundos
+    setTimeout(() => toast.remove(), 30000);
+}
+
+// Adiciona botão de importar ao header
+function addImportButton() {
+    const refreshBtn = document.getElementById('refresh-btn');
+    if (refreshBtn && !document.getElementById('import-btn-header')) {
+        const importBtn = document.createElement('button');
+        importBtn.id = 'import-btn-header';
+        importBtn.className = 'bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 hover:bg-green-700 transition-all no-print';
+        importBtn.innerHTML = '<i data-lucide="file-up" class="w-4 h-4"></i><span>Importar</span>';
+        importBtn.onclick = openImportModal;
+        importBtn.title = 'Importar extrato OFX ou CSV';
+        
+        refreshBtn.parentNode.insertBefore(importBtn, refreshBtn);
+        lucide.createIcons();
+    }
+}
+</script>
+
+<style>
+@keyframes slideUp {
+    from { 
+        opacity: 0; 
+        transform: translateY(20px); 
+    }
+    to { 
+        opacity: 1; 
+        transform: translateY(0); 
+    }
+}
+
+.animate-slideUp {
+    animation: slideUp 0.3s ease-out;
+}
+</style>
