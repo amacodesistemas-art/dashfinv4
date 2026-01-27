@@ -245,8 +245,60 @@ function renderAdvancedFilters() {
         if (!GLOBAL_DATA) return;
         const darkIcon = document.getElementById('dark-icon'); if (darkIcon) { const isDark = document.documentElement.classList.contains('dark'); darkIcon.setAttribute('data-lucide', isDark ? 'sun' : 'moon'); }
         const privIcon = document.getElementById('privacy-icon'); if (privIcon) { privIcon.setAttribute('data-lucide', IS_PRIVACY_MODE ? 'eye-off' : 'eye'); }
-        if (CURRENT_VIEW === 'overview') { renderOverview(); } else if (CURRENT_VIEW === 'account-detail') { renderAccountDetail(); }
+        
+        // Renderiza baseado na aba atual
+        if (CURRENT_TAB === 'accounts') {
+            renderAccountsView();
+        } else if (CURRENT_VIEW === 'overview') { 
+            renderOverview(); 
+        } else if (CURRENT_VIEW === 'account-detail') { 
+            renderAccountDetail(); 
+        }
         lucide.createIcons();
+    }
+    
+    // Renderiza a visão de contas
+    function renderAccountsView() {
+        const data = GLOBAL_DATA;
+        const totalPatrimonio = data.accounts.reduce((s, a) => s + a.balance, 0);
+        
+        const html = `
+            <div class="fade-in space-y-6 font-sans text-slate-700 transition-all">
+                ${renderHeader('Dashboard Financeiro', 'Bem-vindo, ' + data.config.nome_cliente)}
+                ${renderTabNavigation()}
+                ${renderFilterBar()}
+                ${renderAccountsSection()}
+                <div class="h-8"></div>
+            </div>
+        `;
+        
+        document.getElementById('app').innerHTML = html;
+        lucide.createIcons();
+    }
+    
+    // Renderiza navegação por abas
+    function renderTabNavigation() {
+        const tabs = [
+            { id: 'dashboard', label: 'Visão Geral', icon: 'layout-dashboard' },
+            { id: 'accounts', label: 'Contas', icon: 'landmark' }
+        ];
+        
+        // Adiciona DRE se o plano permitir
+        if (hasFeature && hasFeature('dre')) {
+            tabs.push({ id: 'dre', label: 'DRE', icon: 'file-bar-chart' });
+        }
+        
+        return '<div class="flex gap-2 mb-6 bg-slate-100 dark:bg-slate-700 p-1 rounded-xl no-print">' +
+            tabs.map(function(tab) {
+                var isActive = CURRENT_TAB === tab.id;
+                return '<button onclick="switchTab(\'' + tab.id + '\')" ' +
+                    'class="flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ' + 
+                    (isActive ? 'bg-white dark:bg-slate-600 shadow text-blue-600 dark:text-white' : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white') + '">' +
+                    '<i data-lucide="' + tab.icon + '" class="w-4 h-4"></i>' +
+                    '<span class="hidden sm:inline">' + tab.label + '</span>' +
+                '</button>';
+            }).join('') +
+        '</div>';
     }
 
 // ----------------------------------------------------------
