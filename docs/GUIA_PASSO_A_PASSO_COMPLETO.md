@@ -244,42 +244,89 @@ function criarEstruturaCliente() {
     ]);
   }
   
-  // CONTAS
+  // BANCOS (Onde o dinheiro fica)
+  var bancos = ss.getSheetByName('BANCOS') || ss.insertSheet('BANCOS');
+  if (bancos.getLastRow() === 0) {
+    bancos.appendRow(['ID', 'Nome', 'Tipo', 'Saldo', 'Icone', 'Agencia', 'Conta_Numero']);
+    bancos.getRange(1, 1, 1, 7).setBackground('#059669').setFontColor('#fff').setFontWeight('bold');
+    bancos.setFrozenRows(1);
+    // Exemplos
+    bancos.appendRow([1, 'Nubank', 'Digital', 10000, '💜', '', '']);
+    bancos.appendRow([2, 'Inter', 'Digital', 5000, '🧡', '', '']);
+  }
+  
+  // CONTAS (Projetos/Centros de custo)
   var contas = ss.getSheetByName('CONTAS') || ss.insertSheet('CONTAS');
   if (contas.getLastRow() === 0) {
-    contas.appendRow(['ID', 'Nome', 'Tipo', 'Saldo', 'Icone']);
-    contas.getRange(1, 1, 1, 5).setBackground('#3b82f6').setFontColor('#fff');
+    contas.appendRow(['ID', 'Nome', 'Tipo', 'Icone', 'Orcamento_Mensal']);
+    contas.getRange(1, 1, 1, 5).setBackground('#7c3aed').setFontColor('#fff').setFontWeight('bold');
+    contas.setFrozenRows(1);
+    // Exemplos
+    contas.appendRow([1, 'MOTO', 'Veículo', '🏍️', 1500]);
+    contas.appendRow([2, 'CASA', 'Moradia', '🏠', 3000]);
   }
   
   // TRANSACOES
   var trans = ss.getSheetByName('TRANSACOES') || ss.insertSheet('TRANSACOES');
   if (trans.getLastRow() === 0) {
-    trans.appendRow(['Data', 'Tipo', 'Categoria', 'Subcategoria', 'Valor', 'Conta', 'Status', 'Descrição', 'Centro de Custo']);
-    trans.getRange(1, 1, 1, 9).setBackground('#10b981').setFontColor('#fff');
+    trans.appendRow(['Data', 'Tipo', 'Categoria', 'Subcategoria', 'Valor', 'Conta', 'Banco', 'Status', 'Descrição', 'Centro_Custo']);
+    trans.getRange(1, 1, 1, 10).setBackground('#2563eb').setFontColor('#fff').setFontWeight('bold');
+    trans.setFrozenRows(1);
+    
+    // Validação de Tipo
+    var tipoRule = SpreadsheetApp.newDataValidation()
+      .requireValueInList(['Entrada', 'Saída'], true)
+      .build();
+    trans.getRange('B2:B1000').setDataValidation(tipoRule);
+    
+    // Validação de Status
+    var statusRule = SpreadsheetApp.newDataValidation()
+      .requireValueInList(['Pendente', 'Pago', 'Recebido', 'Atrasado', 'Agendado', 'Concluído'], true)
+      .build();
+    trans.getRange('H2:H1000').setDataValidation(statusRule);
   }
   
   // CATEGORIAS
   var cats = ss.getSheetByName('CATEGORIAS') || ss.insertSheet('CATEGORIAS');
   if (cats.getLastRow() === 0) {
     cats.appendRow(['Categoria', 'Grupo_DRE']);
-    cats.getRange(1, 1, 1, 2).setBackground('#8b5cf6').setFontColor('#fff');
+    cats.getRange(1, 1, 1, 2).setBackground('#dc2626').setFontColor('#fff').setFontWeight('bold');
   }
   
   // METAS
   var metas = ss.getSheetByName('METAS') || ss.insertSheet('METAS');
   if (metas.getLastRow() === 0) {
     metas.appendRow(['Categoria', 'Meta', 'Tipo']);
-    metas.getRange(1, 1, 1, 3).setBackground('#f59e0b').setFontColor('#fff');
+    metas.getRange(1, 1, 1, 3).setBackground('#f59e0b').setFontColor('#fff').setFontWeight('bold');
+    
+    var tipoMetaRule = SpreadsheetApp.newDataValidation()
+      .requireValueInList(['Gasto', 'Receita'], true)
+      .build();
+    metas.getRange('C2:C1000').setDataValidation(tipoMetaRule);
   }
   
   // REGRAS_CATEGORIZACAO (para importação automática)
   var regras = ss.getSheetByName('REGRAS_CATEGORIZACAO') || ss.insertSheet('REGRAS_CATEGORIZACAO');
   if (regras.getLastRow() === 0) {
     regras.appendRow(['padrao', 'categoria', 'subcategoria', 'tipo']);
-    regras.getRange(1, 1, 1, 4).setBackground('#ec4899').setFontColor('#fff');
+    regras.getRange(1, 1, 1, 4).setBackground('#ec4899').setFontColor('#fff').setFontWeight('bold');
+    // Exemplos
+    regras.appendRow(['pix recebido', 'EMPRESA CLIENTE', 'SERVIÇOS', 'Entrada']);
+    regras.appendRow(['financiamento', 'MOTO', 'FINANCIAMENTO', 'Saída']);
+    regras.appendRow(['energia', 'CASA', 'LUZ', 'Saída']);
   }
   
+  // Remove aba padrão vazia
+  try {
+    var sheet1 = ss.getSheetByName('Sheet1') || ss.getSheetByName('Página1') || ss.getSheetByName('Planilha1');
+    if (sheet1 && ss.getSheets().length > 1) {
+      ss.deleteSheet(sheet1);
+    }
+  } catch (e) {}
+  
   Logger.log('✅ Estrutura criada com sucesso!');
+  Logger.log('📋 ID: ' + ss.getId());
+  Logger.log('🔗 URL: ' + ss.getUrl());
 }
 ```
 
