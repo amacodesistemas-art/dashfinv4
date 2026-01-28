@@ -102,6 +102,30 @@ const DataService = {
   // Obtém plano do cliente
   getClientPlan: function(ss) {
     try {
+      // 1. Primeiro, tenta obter da ADMIN_MASTER se estiver em modo multi-cliente
+      if (typeof AdminService !== 'undefined' && AdminService.isMultiClientMode()) {
+        var props = PropertiesService.getUserProperties();
+        var clientId = props.getProperty('CURRENT_CLIENT_ID');
+        
+        if (clientId) {
+          var client = AdminService.getClientById(clientId);
+          if (client && client.plano) {
+            var planoAdmin = String(client.plano).toLowerCase().trim();
+            Logger.log('[Plans] Plano da ADMIN_MASTER: ' + planoAdmin);
+            
+            // Mapeia para plano válido
+            if (planoAdmin.includes('enterprise') || planoAdmin.includes('avançado') || planoAdmin.includes('avancado') || planoAdmin.includes('advanced')) {
+              return this.PLANS.ENTERPRISE;
+            } else if (planoAdmin.includes('professional') || planoAdmin.includes('profissional') || planoAdmin.includes('pro')) {
+              return this.PLANS.PROFESSIONAL;
+            } else {
+              return this.PLANS.BASIC;
+            }
+          }
+        }
+      }
+      
+      // 2. Fallback: Lê da aba CONFIG da planilha do cliente
       const configSheet = ss.getSheetByName('CONFIG');
       
       if (!configSheet) {
@@ -129,12 +153,12 @@ const DataService = {
           Logger.log('[Plans] Encontrou linha de plano: ' + value);
           
           // Mapeia para plano válido
-          if (value.includes('avançado') || value.includes('avancado') || value.includes('advanced')) {
-            Logger.log('[Plans] Detectado: ADVANCED');
-            return this.PLANS.ADVANCED;
-          } else if (value.includes('intermediário') || value.includes('intermediario') || value.includes('intermediate')) {
-            Logger.log('[Plans] Detectado: INTERMEDIATE');
-            return this.PLANS.INTERMEDIATE;
+          if (value.includes('enterprise') || value.includes('avançado') || value.includes('avancado') || value.includes('advanced')) {
+            Logger.log('[Plans] Detectado: ENTERPRISE');
+            return this.PLANS.ENTERPRISE;
+          } else if (value.includes('professional') || value.includes('profissional') || value.includes('pro') || value.includes('intermediário') || value.includes('intermediario')) {
+            Logger.log('[Plans] Detectado: PROFESSIONAL');
+            return this.PLANS.PROFESSIONAL;
           } else if (value.includes('básico') || value.includes('basico') || value.includes('basic')) {
             Logger.log('[Plans] Detectado: BASIC');
             return this.PLANS.BASIC;
