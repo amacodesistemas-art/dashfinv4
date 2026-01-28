@@ -12,7 +12,14 @@ let IMPORT_STATE = {
 
 // Abre modal de importação
 function openImportModal() {
-    const accounts = GLOBAL_DATA.accounts || [];
+    const banks = GLOBAL_DATA.banks || [];
+    const accounts = GLOBAL_DATA.accounts || []; // Para categorização
+    
+    // Se não tem bancos, mostra mensagem
+    if (banks.length === 0) {
+        showToast('Adicione bancos na aba BANCOS da planilha antes de importar.', 'error', 5000);
+        return;
+    }
     
     const modalHtml = `
         <div id="import-modal" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onclick="closeImportModal(event)">
@@ -32,22 +39,48 @@ function openImportModal() {
                 <!-- Conteúdo -->
                 <div class="p-6 space-y-6 overflow-y-auto max-h-[70vh]">
                     
-                    <!-- Step 1: Selecionar Conta -->
+                    <!-- Step 1: Selecionar BANCO -->
                     <div class="space-y-2">
                         <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">
-                            1. Selecione a Conta Bancária
+                            1. Selecione o Banco de origem do extrato
                         </label>
-                        <select id="import-account" onchange="updateImportAccount(this.value)" 
+                        <select id="import-bank" onchange="updateImportBank(this.value)" 
                                 class="w-full p-3 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-800 dark:text-white">
-                            <option value="">Selecione...</option>
-                            ${accounts.map(acc => `<option value="${acc.id}">${acc.icon} ${acc.name}</option>`).join('')}
+                            <option value="">Selecione o banco...</option>
+                            ${banks.map(bank => `<option value="${bank.id}">${bank.icon || '🏦'} ${bank.name} (${bank.type || 'Conta'})</option>`).join('')}
                         </select>
+                        <p class="text-xs text-slate-400 mt-1">
+                            <i data-lucide="info" class="w-3 h-3 inline"></i>
+                            O banco determina de onde vem o dinheiro. A categorização será feita automaticamente.
+                        </p>
+                    </div>
+                    
+                    <!-- Info sobre categorização -->
+                    <div class="p-4 bg-gradient-to-r from-purple-50 to-indigo-50 dark:from-purple-900/20 dark:to-indigo-900/20 rounded-xl border border-purple-200 dark:border-purple-800">
+                        <h4 class="font-medium text-purple-800 dark:text-purple-200 flex items-center gap-2 mb-2">
+                            <i data-lucide="brain" class="w-5 h-5"></i>
+                            Categorização Inteligente
+                        </h4>
+                        <p class="text-sm text-purple-700 dark:text-purple-300">
+                            Após a importação, a IA irá sugerir automaticamente a <strong>Conta/Projeto</strong> e <strong>Subcategoria</strong> de cada transação com base nos padrões que você configurar e no histórico de correções.
+                        </p>
+                        <div class="mt-3 flex flex-wrap gap-2 text-xs">
+                            <span class="px-2 py-1 bg-white dark:bg-slate-800 rounded-full text-purple-600 dark:text-purple-400 border border-purple-200 dark:border-purple-700">
+                                🤖 IA aprende com suas correções
+                            </span>
+                            <span class="px-2 py-1 bg-white dark:bg-slate-800 rounded-full text-purple-600 dark:text-purple-400 border border-purple-200 dark:border-purple-700">
+                                📋 Regras personalizadas
+                            </span>
+                            <span class="px-2 py-1 bg-white dark:bg-slate-800 rounded-full text-purple-600 dark:text-purple-400 border border-purple-200 dark:border-purple-700">
+                                ⚡ Processo rápido
+                            </span>
+                        </div>
                     </div>
                     
                     <!-- Step 2: Upload de Arquivo -->
                     <div class="space-y-2">
                         <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">
-                            2. Selecione o Arquivo (OFX ou CSV)
+                            2. Selecione o Arquivo do Extrato
                         </label>
                         <div id="import-dropzone" 
                              class="border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-xl p-8 text-center cursor-pointer hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all"
