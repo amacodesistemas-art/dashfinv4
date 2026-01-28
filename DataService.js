@@ -291,8 +291,28 @@ const DataService = {
         id: String(row[0]),
         name: String(row[1]),
         type: String(row[2]),
+        budget: parseFloat(row[3]) || 0, // Orçamento mensal (opcional)
+        icon: row[4] || '📁'
+      }));
+  },
+  
+  // NOVO: Lê os bancos
+  readBanks: function(ss) {
+    const sheet = ss.getSheetByName('BANCOS');
+    const lastRow = sheet ? Math.max(2, sheet.getLastRow()) : 2;
+    if (!sheet || lastRow < 2) return [];
+
+    const data = sheet.getRange(2, 1, lastRow - 1, 7).getValues();
+    return data
+      .filter(row => row[0] && String(row[0]).trim() !== '')
+      .map(row => ({
+        id: String(row[0]),
+        name: String(row[1]),
+        type: String(row[2]),
         balance: parseFloat(row[3]) || 0,
-        icon: row[4] || '💰'
+        icon: row[4] || '🏦',
+        agency: String(row[5] || ''),
+        accountNumber: String(row[6] || '')
       }));
   },
 
