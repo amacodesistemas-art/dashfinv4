@@ -177,8 +177,9 @@ const DataService = {
     
     const config = this.readConfig(ss);
     const accounts = this.readAccounts(ss);
+    const banks = this.readBanks(ss);
     const dreMapping = this.readDreMapping(ss);
-    const transactions = this.readTransactions(ss, accounts, dreMapping);
+    const transactions = this.readTransactions(ss, accounts, banks, dreMapping);
     const goals = this.readGoals(ss);
     
     // Obtem informações do plano
@@ -188,6 +189,7 @@ const DataService = {
     // Validação de dados
     const validation = this.validateData({
       accounts: accounts,
+      banks: banks,
       transactions: transactions,
       goals: goals
     });
@@ -195,6 +197,7 @@ const DataService = {
     return {
       config: config,
       accounts: accounts,
+      banks: banks,
       transactions: transactions,
       goals: goals,
       lastUpdate: new Date().toISOString(),
