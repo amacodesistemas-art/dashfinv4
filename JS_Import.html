@@ -299,14 +299,14 @@ function clearImportFile() {
 
 // Valida formulário
 function validateImportForm() {
-    const isValid = IMPORT_STATE.accountId && IMPORT_STATE.file;
+    const isValid = IMPORT_STATE.bankId && IMPORT_STATE.file;
     document.getElementById('import-btn').disabled = !isValid;
 }
 
 // Processa importação
 function processImport() {
-    if (!IMPORT_STATE.accountId || !IMPORT_STATE.content) {
-        showToast('Selecione a conta e o arquivo', 'error');
+    if (!IMPORT_STATE.bankId || !IMPORT_STATE.content) {
+        showToast('Selecione o banco e o arquivo', 'error');
         return;
     }
     
@@ -315,13 +315,13 @@ function processImport() {
     btn.innerHTML = '<i data-lucide="loader" class="w-4 h-4 animate-spin"></i> Processando...';
     lucide.createIcons();
     
-    showToast('Processando arquivo... Isso pode levar alguns segundos.', 'info', 5000);
+    showToast('Processando arquivo... A IA irá categorizar as transações.', 'info', 5000);
     
     if (IMPORT_STATE.type === 'ofx') {
         google.script.run
             .withSuccessHandler(handleImportResult)
             .withFailureHandler(handleImportError)
-            .importOFXFile(IMPORT_STATE.content, IMPORT_STATE.accountId);
+            .importOFXFile(IMPORT_STATE.content, IMPORT_STATE.bankId);
     } else {
         const config = {
             separator: document.getElementById('csv-separator').value,
@@ -335,7 +335,7 @@ function processImport() {
         google.script.run
             .withSuccessHandler(handleImportResult)
             .withFailureHandler(handleImportError)
-            .importCSVFile(IMPORT_STATE.content, config, IMPORT_STATE.accountId);
+            .importCSVFile(IMPORT_STATE.content, config, IMPORT_STATE.bankId);
     }
 }
 
