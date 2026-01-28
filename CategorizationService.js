@@ -243,21 +243,7 @@ function learnCategorization(description, correctCategory, correctType) {
   return CategorizationService.learnFromCorrection(ss, description, correctCategory, correctType);
 }
 
-// Busca API Key
-function getAPIKey(ss) {
-  var configSheet = ss.getSheetByName('CONFIG');
-  if (!configSheet) return null;
-  
-  var data = configSheet.getRange('A:B').getValues();
-  for (var i = 0; i < data.length; i++) {
-    var key = String(data[i][0]).toLowerCase().trim();
-    if (key.indexOf('api_key') > -1) {
-      return data[i][1];
-    }
-  }
-  
-  return null;
-}
+// Nota: getAPIKey foi movido para Config.js para evitar duplicação
 
 // Teste de categorização
 function testCategorization() {
