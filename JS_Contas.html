@@ -1,0 +1,527 @@
+<script>
+// ===================================
+// COMPONENTE DE VISÃO POR CONTAS/PROJETOS
+// ===================================
+
+let SELECTED_PROJECT = null;
+let PROJECTS_VIEW_MODE = 'cards'; // 'cards' ou 'list'
+
+// Renderiza seção de contas/projetos
+function renderProjectsSection() {
+    const accounts = GLOBAL_DATA.accounts || [];
+    const transactions = GLOBAL_DATA.transactions || [];
+    
+    if (accounts.length === 0) {
+        return `
+            <div class="bg-white dark:bg-slate-800 rounded-2xl p-8 text-center">
+                <i data-lucide="folder" class="w-16 h-16 mx-auto text-slate-300 dark:text-slate-600 mb-4"></i>
+                <h3 class="text-lg font-bold text-slate-800 dark:text-white mb-2">Nenhuma conta/projeto cadastrado</h3>
+                <p class="text-slate-500 dark:text-slate-400">Adicione contas na aba CONTAS da planilha.</p>
+            </div>
+        `;
+    }
+    
+    // Calcula dados de cada conta/projeto
+    const projectsData = accounts.map(acc => {
+        const accTransactions = transactions.filter(t => 
+            String(t.accountId) === String(acc.id) || t.account === acc.name || t.category === acc.name
+        );
+        
+        // Transações no período filtrado
+        const filteredTxs = accTransactions.filter(t => {
+            const tDate = parseDate(t.date);
+            return tDate >= START_DATE && tDate <= END_DATE;
+        });
+        
+        const entradas = filteredTxs.filter(t => t.type === 'Entrada').reduce((sum, t) => sum + t.value, 0);
+        const saidas = filteredTxs.filter(t => t.type === 'Saída').reduce((sum, t) => sum + t.value, 0);
+        
+        // Agrupa por subcategoria
+        const subcategorias = {};
+        filteredTxs.forEach(tx => {
+            const sub = tx.subcategory || 'Outros';
+            if (!subcategorias[sub]) {
+                subcategorias[sub] = { entradas: 0, saidas: 0, count: 0 };
+            }
+            if (tx.type === 'Entrada') {
+                subcategorias[sub].entradas += tx.value;
+            } else {
+                subcategorias[sub].saidas += tx.value;
+            }
+            subcategorias[sub].count++;
+        });
+        
+        // Últimas transações
+        const recentTxs = accTransactions
+            .sort((a, b) => new Date(b.date) - new Date(a.date))
+            .slice(0, 5);
+        
+        // Bancos utilizados
+        const bancosUsados = [...new Set(filteredTxs.map(t => t.bank).filter(b => b && b !== 'Não informado'))];
+        
+        // Progresso do orçamento (se tiver)
+        const orcamento = acc.budget || 0;
+        const percentOrcamento = orcamento > 0 ? (saidas / orcamento) * 100 : 0;
+        
+        return {
+            ...acc,
+            transactions: filteredTxs,
+            recentTransactions: recentTxs,
+            subcategorias,
+            entradas,
+            saidas,
+            saldo: entradas - saidas,
+            bancosUsados,
+            orcamento,
+            percentOrcamento
+        };
+    });
+    
+    // Totais
+    const totalEntradas = projectsData.reduce((sum, p) => sum + p.entradas, 0);
+    const totalSaidas = projectsData.reduce((sum, p) => sum + p.saidas, 0);
+    
+    return `
+        <!-- Header da Seção de Contas/Projetos -->
+        <div class="bg-white dark:bg-slate-800 rounded-2xl p-6 mb-6">
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+                <div>
+                    <h2 class="text-xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                        <i data-lucide="folder-kanban" class="w-6 h-6 text-purple-500"></i>
+                        Visão por Contas/Projetos
+                    </h2>
+                    <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                        ${accounts.length} conta(s) • Período: ${formatDateBR(START_DATE)} a ${formatDateBR(END_DATE)}
+                    </p>
+                </div>
+                
+                <div class="flex items-center gap-2">
+                    <div class="flex bg-slate-100 dark:bg-slate-700 rounded-lg p-1">
+                        <button onclick="setProjectsViewMode('cards')" 
+                                class="p-2 rounded-lg transition-all ${PROJECTS_VIEW_MODE === 'cards' ? 'bg-white dark:bg-slate-600 shadow' : 'hover:bg-white/50'}"
+                                title="Visualização em Cards">
+                            <i data-lucide="layout-grid" class="w-4 h-4"></i>
+                        </button>
+                        <button onclick="setProjectsViewMode('list')" 
+                                class="p-2 rounded-lg transition-all ${PROJECTS_VIEW_MODE === 'list' ? 'bg-white dark:bg-slate-600 shadow' : 'hover:bg-white/50'}"
+                                title="Visualização em Lista">
+                            <i data-lucide="list" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Resumo Geral -->
+            <div class="grid grid-cols-2 md:grid-cols-3 gap-4 p-4 bg-gradient-to-r from-purple-50 to-indigo-50 dark:from-purple-900/20 dark:to-indigo-900/20 rounded-xl">
+                <div class="text-center">
+                    <p class="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wide">Total Recebido</p>
+                    <p class="text-2xl font-bold text-green-600 privacy-blur">${formatCurrency(totalEntradas)}</p>
+                </div>
+                <div class="text-center">
+                    <p class="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wide">Total Gasto</p>
+                    <p class="text-2xl font-bold text-red-600 privacy-blur">${formatCurrency(totalSaidas)}</p>
+                </div>
+                <div class="text-center">
+                    <p class="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wide">Saldo</p>
+                    <p class="text-2xl font-bold ${totalEntradas - totalSaidas >= 0 ? 'text-green-600' : 'text-red-600'} privacy-blur">
+                        ${formatCurrency(totalEntradas - totalSaidas)}
+                    </p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Cards/Lista de Contas/Projetos -->
+        ${PROJECTS_VIEW_MODE === 'cards' ? renderProjectsCards(projectsData) : renderProjectsList(projectsData)}
+        
+        <!-- Modal de Detalhes -->
+        <div id="project-detail-modal"></div>
+    `;
+}
+
+// Renderiza projetos em formato de cards
+function renderProjectsCards(projectsData) {
+    return `
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            ${projectsData.map(project => `
+                <div class="bg-white dark:bg-slate-800 rounded-2xl p-6 border border-slate-200 dark:border-slate-700 hover:shadow-lg hover:border-purple-300 dark:hover:border-purple-600 transition-all cursor-pointer group"
+                     onclick="openProjectDetail('${project.id}')" data-testid="project-card-${project.id}">
+                    
+                    <!-- Header do Card -->
+                    <div class="flex items-start justify-between mb-4">
+                        <div class="flex items-center gap-3">
+                            <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center text-2xl shadow-lg">
+                                ${project.icon || '📁'}
+                            </div>
+                            <div>
+                                <h3 class="font-bold text-slate-800 dark:text-white group-hover:text-purple-600 transition-colors">
+                                    ${project.name}
+                                </h3>
+                                <p class="text-xs text-slate-500 dark:text-slate-400">${project.type || 'Projeto'}</p>
+                            </div>
+                        </div>
+                        <div class="p-2 rounded-lg bg-slate-100 dark:bg-slate-700 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <i data-lucide="chevron-right" class="w-4 h-4 text-slate-400"></i>
+                        </div>
+                    </div>
+                    
+                    <!-- Valores -->
+                    <div class="grid grid-cols-2 gap-4 mb-4">
+                        <div>
+                            <p class="text-xs text-slate-500 dark:text-slate-400 mb-1">Recebido</p>
+                            <p class="text-xl font-bold text-green-600 privacy-blur">${formatCurrencyCompact(project.entradas)}</p>
+                        </div>
+                        <div>
+                            <p class="text-xs text-slate-500 dark:text-slate-400 mb-1">Gasto</p>
+                            <p class="text-xl font-bold text-red-600 privacy-blur">${formatCurrencyCompact(project.saidas)}</p>
+                        </div>
+                    </div>
+                    
+                    <!-- Barra de Orçamento (se tiver) -->
+                    ${project.orcamento > 0 ? `
+                        <div class="mb-4">
+                            <div class="flex justify-between text-xs mb-1">
+                                <span class="text-slate-500">Orçamento</span>
+                                <span class="${project.percentOrcamento > 100 ? 'text-red-600' : project.percentOrcamento > 80 ? 'text-orange-600' : 'text-green-600'}">
+                                    ${project.percentOrcamento.toFixed(0)}%
+                                </span>
+                            </div>
+                            <div class="h-2 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
+                                <div class="h-full rounded-full transition-all ${project.percentOrcamento > 100 ? 'bg-red-500' : project.percentOrcamento > 80 ? 'bg-orange-500' : 'bg-green-500'}" 
+                                     style="width: ${Math.min(project.percentOrcamento, 100)}%"></div>
+                            </div>
+                            <p class="text-xs text-slate-400 mt-1">${formatCurrencyCompact(project.saidas)} de ${formatCurrencyCompact(project.orcamento)}</p>
+                        </div>
+                    ` : ''}
+                    
+                    <!-- Subcategorias Top 3 -->
+                    ${Object.keys(project.subcategorias).length > 0 ? `
+                        <div class="pt-4 border-t border-slate-100 dark:border-slate-700">
+                            <p class="text-xs text-slate-500 dark:text-slate-400 mb-2">Subcategorias</p>
+                            <div class="space-y-1">
+                                ${Object.entries(project.subcategorias)
+                                    .sort((a, b) => (b[1].saidas + b[1].entradas) - (a[1].saidas + a[1].entradas))
+                                    .slice(0, 3)
+                                    .map(([sub, data]) => `
+                                    <div class="flex items-center justify-between text-xs">
+                                        <span class="text-slate-600 dark:text-slate-400 truncate">${sub}</span>
+                                        <span class="${data.saidas > data.entradas ? 'text-red-600' : 'text-green-600'} font-medium privacy-blur">
+                                            ${data.saidas > data.entradas ? '-' : '+'}${formatCurrencyCompact(Math.max(data.saidas, data.entradas))}
+                                        </span>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    ` : ''}
+                    
+                    <!-- Bancos utilizados -->
+                    ${project.bancosUsados.length > 0 ? `
+                        <div class="mt-3 flex items-center gap-1 text-xs text-slate-400">
+                            <i data-lucide="landmark" class="w-3 h-3"></i>
+                            ${project.bancosUsados.slice(0, 2).join(', ')}
+                            ${project.bancosUsados.length > 2 ? ` +${project.bancosUsados.length - 2}` : ''}
+                        </div>
+                    ` : ''}
+                </div>
+            `).join('')}
+        </div>
+    `;
+}
+
+// Renderiza projetos em formato de lista
+function renderProjectsList(projectsData) {
+    return `
+        <div class="bg-white dark:bg-slate-800 rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700">
+            <table class="w-full">
+                <thead class="bg-slate-50 dark:bg-slate-700">
+                    <tr>
+                        <th class="text-left p-4 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Conta/Projeto</th>
+                        <th class="text-right p-4 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Recebido</th>
+                        <th class="text-right p-4 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Gasto</th>
+                        <th class="text-right p-4 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Saldo</th>
+                        <th class="text-center p-4 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase hidden md:table-cell">Orçamento</th>
+                        <th class="text-center p-4 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Ações</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
+                    ${projectsData.map(project => `
+                        <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors cursor-pointer"
+                            onclick="openProjectDetail('${project.id}')">
+                            <td class="p-4">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center text-xl">
+                                        ${project.icon || '📁'}
+                                    </div>
+                                    <div>
+                                        <p class="font-medium text-slate-800 dark:text-white">${project.name}</p>
+                                        <p class="text-xs text-slate-500">${project.type || 'Projeto'}</p>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="p-4 text-right">
+                                <p class="font-medium text-green-600 privacy-blur">${formatCurrency(project.entradas)}</p>
+                            </td>
+                            <td class="p-4 text-right">
+                                <p class="font-medium text-red-600 privacy-blur">${formatCurrency(project.saidas)}</p>
+                            </td>
+                            <td class="p-4 text-right">
+                                <p class="font-bold ${project.saldo >= 0 ? 'text-green-600' : 'text-red-600'} privacy-blur">
+                                    ${project.saldo >= 0 ? '+' : ''}${formatCurrency(project.saldo)}
+                                </p>
+                            </td>
+                            <td class="p-4 text-center hidden md:table-cell">
+                                ${project.orcamento > 0 ? `
+                                    <span class="text-xs px-2 py-1 rounded-full ${project.percentOrcamento > 100 ? 'bg-red-100 text-red-700' : project.percentOrcamento > 80 ? 'bg-orange-100 text-orange-700' : 'bg-green-100 text-green-700'}">
+                                        ${project.percentOrcamento.toFixed(0)}%
+                                    </span>
+                                ` : '-'}
+                            </td>
+                            <td class="p-4 text-center">
+                                <button class="p-2 hover:bg-slate-100 dark:hover:bg-slate-600 rounded-lg transition-colors">
+                                    <i data-lucide="eye" class="w-4 h-4 text-slate-400"></i>
+                                </button>
+                            </td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        </div>
+    `;
+}
+
+// Abre modal de detalhe do projeto
+function openProjectDetail(projectId) {
+    const accounts = GLOBAL_DATA.accounts || [];
+    const transactions = GLOBAL_DATA.transactions || [];
+    
+    const project = accounts.find(a => String(a.id) === String(projectId));
+    if (!project) return;
+    
+    // Filtra transações do projeto
+    const projectTxs = transactions.filter(t => 
+        String(t.accountId) === String(projectId) || t.account === project.name || t.category === project.name
+    ).sort((a, b) => new Date(b.date) - new Date(a.date));
+    
+    // Filtra pelo período
+    const filteredTxs = projectTxs.filter(t => {
+        const tDate = parseDate(t.date);
+        return tDate >= START_DATE && tDate <= END_DATE;
+    });
+    
+    // Agrupa por subcategoria
+    const bySubcategory = {};
+    filteredTxs.forEach(tx => {
+        const sub = tx.subcategory || 'Outros';
+        if (!bySubcategory[sub]) {
+            bySubcategory[sub] = { entradas: 0, saidas: 0, count: 0 };
+        }
+        if (tx.type === 'Entrada') {
+            bySubcategory[sub].entradas += tx.value;
+        } else {
+            bySubcategory[sub].saidas += tx.value;
+        }
+        bySubcategory[sub].count++;
+    });
+    
+    // Agrupa por banco
+    const byBank = {};
+    filteredTxs.forEach(tx => {
+        const bank = tx.bank || 'Não informado';
+        if (!byBank[bank]) {
+            byBank[bank] = { entradas: 0, saidas: 0, count: 0 };
+        }
+        if (tx.type === 'Entrada') {
+            byBank[bank].entradas += tx.value;
+        } else {
+            byBank[bank].saidas += tx.value;
+        }
+        byBank[bank].count++;
+    });
+    
+    const totalEntradas = filteredTxs.filter(t => t.type === 'Entrada').reduce((sum, t) => sum + t.value, 0);
+    const totalSaidas = filteredTxs.filter(t => t.type === 'Saída').reduce((sum, t) => sum + t.value, 0);
+    
+    const modalHtml = `
+        <div class="fixed inset-0 bg-black/50 z-50 flex items-start justify-center p-4 overflow-y-auto" onclick="closeProjectDetail(event)">
+            <div class="bg-white dark:bg-slate-800 rounded-2xl max-w-4xl w-full my-8 overflow-hidden" onclick="event.stopPropagation()">
+                
+                <!-- Header -->
+                <div class="bg-gradient-to-r from-purple-600 to-indigo-600 p-6 text-white">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-4">
+                            <div class="w-16 h-16 rounded-xl bg-white/20 flex items-center justify-center text-3xl">
+                                ${project.icon || '📁'}
+                            </div>
+                            <div>
+                                <h2 class="text-2xl font-bold">${project.name}</h2>
+                                <p class="text-purple-100">${project.type || 'Projeto'}</p>
+                            </div>
+                        </div>
+                        <button onclick="closeProjectDetail()" class="p-2 hover:bg-white/20 rounded-lg transition-colors">
+                            <i data-lucide="x" class="w-6 h-6"></i>
+                        </button>
+                    </div>
+                    
+                    <!-- Resumo -->
+                    <div class="grid grid-cols-3 gap-4 mt-6">
+                        <div class="bg-white/10 rounded-xl p-4 text-center">
+                            <p class="text-xs text-purple-100 uppercase">Recebido</p>
+                            <p class="text-2xl font-bold text-green-300 privacy-blur">${formatCurrency(totalEntradas)}</p>
+                        </div>
+                        <div class="bg-white/10 rounded-xl p-4 text-center">
+                            <p class="text-xs text-purple-100 uppercase">Gasto</p>
+                            <p class="text-2xl font-bold text-red-300 privacy-blur">${formatCurrency(totalSaidas)}</p>
+                        </div>
+                        <div class="bg-white/10 rounded-xl p-4 text-center">
+                            <p class="text-xs text-purple-100 uppercase">Saldo</p>
+                            <p class="text-2xl font-bold privacy-blur">${formatCurrency(totalEntradas - totalSaidas)}</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Conteúdo -->
+                <div class="p-6 max-h-[60vh] overflow-y-auto">
+                    
+                    <!-- Abas -->
+                    <div class="flex gap-2 mb-6 border-b border-slate-200 dark:border-slate-700">
+                        <button onclick="switchProjectTab('transactions')" id="project-tab-transactions" 
+                                class="px-4 py-2 font-medium text-purple-600 border-b-2 border-purple-600">
+                            Transações
+                        </button>
+                        <button onclick="switchProjectTab('subcategories')" id="project-tab-subcategories"
+                                class="px-4 py-2 font-medium text-slate-500 hover:text-slate-700 dark:text-slate-400">
+                            Subcategorias
+                        </button>
+                        <button onclick="switchProjectTab('banks')" id="project-tab-banks"
+                                class="px-4 py-2 font-medium text-slate-500 hover:text-slate-700 dark:text-slate-400">
+                            Por Banco
+                        </button>
+                    </div>
+                    
+                    <!-- Tab: Transações -->
+                    <div id="project-content-transactions">
+                        ${filteredTxs.length > 0 ? `
+                            <div class="space-y-2">
+                                ${filteredTxs.slice(0, 50).map(tx => `
+                                    <div class="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-700/50 rounded-xl">
+                                        <div class="flex items-center gap-3">
+                                            <div class="w-10 h-10 rounded-lg flex items-center justify-center ${tx.type === 'Entrada' ? 'bg-green-100 dark:bg-green-900/30 text-green-600' : 'bg-red-100 dark:bg-red-900/30 text-red-600'}">
+                                                <i data-lucide="${tx.type === 'Entrada' ? 'arrow-down-left' : 'arrow-up-right'}" class="w-5 h-5"></i>
+                                            </div>
+                                            <div>
+                                                <p class="font-medium text-slate-800 dark:text-white">${tx.subcategory || tx.description || 'Sem descrição'}</p>
+                                                <p class="text-xs text-slate-500">
+                                                    ${formatDateBR(tx.date)} • 
+                                                    <span class="text-emerald-600">${tx.bank || 'Banco não informado'}</span>
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <div class="text-right">
+                                            <p class="font-bold ${tx.type === 'Entrada' ? 'text-green-600' : 'text-red-600'} privacy-blur">
+                                                ${tx.type === 'Entrada' ? '+' : '-'}${formatCurrency(tx.value)}
+                                            </p>
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        ` : `
+                            <div class="text-center py-12">
+                                <i data-lucide="inbox" class="w-12 h-12 mx-auto text-slate-300 mb-4"></i>
+                                <p class="text-slate-500">Nenhuma transação no período</p>
+                            </div>
+                        `}
+                    </div>
+                    
+                    <!-- Tab: Subcategorias -->
+                    <div id="project-content-subcategories" class="hidden">
+                        ${Object.keys(bySubcategory).length > 0 ? `
+                            <div class="space-y-3">
+                                ${Object.entries(bySubcategory)
+                                    .sort((a, b) => (b[1].saidas + b[1].entradas) - (a[1].saidas + a[1].entradas))
+                                    .map(([sub, data]) => `
+                                    <div class="p-4 bg-slate-50 dark:bg-slate-700/50 rounded-xl">
+                                        <div class="flex items-center justify-between mb-2">
+                                            <div>
+                                                <p class="font-medium text-slate-800 dark:text-white">${sub}</p>
+                                                <p class="text-xs text-slate-500">${data.count} transação(ões)</p>
+                                            </div>
+                                            <div class="text-right">
+                                                ${data.entradas > 0 ? `<span class="text-green-600 privacy-blur">+${formatCurrencyCompact(data.entradas)}</span>` : ''}
+                                                ${data.entradas > 0 && data.saidas > 0 ? ' / ' : ''}
+                                                ${data.saidas > 0 ? `<span class="text-red-600 privacy-blur">-${formatCurrencyCompact(data.saidas)}</span>` : ''}
+                                            </div>
+                                        </div>
+                                        <div class="h-2 bg-slate-200 dark:bg-slate-600 rounded-full overflow-hidden flex">
+                                            ${data.entradas > 0 ? `<div class="h-full bg-green-500" style="width: ${data.entradas / (data.entradas + data.saidas) * 100}%"></div>` : ''}
+                                            ${data.saidas > 0 ? `<div class="h-full bg-red-500" style="width: ${data.saidas / (data.entradas + data.saidas) * 100}%"></div>` : ''}
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        ` : `<p class="text-center text-slate-500 py-8">Nenhuma subcategoria</p>`}
+                    </div>
+                    
+                    <!-- Tab: Por Banco -->
+                    <div id="project-content-banks" class="hidden">
+                        ${Object.keys(byBank).length > 0 ? `
+                            <div class="space-y-3">
+                                ${Object.entries(byBank)
+                                    .sort((a, b) => (b[1].saidas + b[1].entradas) - (a[1].saidas + a[1].entradas))
+                                    .map(([bank, data]) => `
+                                    <div class="p-4 bg-slate-50 dark:bg-slate-700/50 rounded-xl">
+                                        <div class="flex items-center justify-between mb-2">
+                                            <div class="flex items-center gap-2">
+                                                <i data-lucide="landmark" class="w-4 h-4 text-emerald-600"></i>
+                                                <p class="font-medium text-slate-800 dark:text-white">${bank}</p>
+                                                <span class="text-xs text-slate-500">(${data.count})</span>
+                                            </div>
+                                            <div class="text-right">
+                                                ${data.entradas > 0 ? `<span class="text-green-600 privacy-blur">+${formatCurrencyCompact(data.entradas)}</span>` : ''}
+                                                ${data.entradas > 0 && data.saidas > 0 ? ' / ' : ''}
+                                                ${data.saidas > 0 ? `<span class="text-red-600 privacy-blur">-${formatCurrencyCompact(data.saidas)}</span>` : ''}
+                                            </div>
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        ` : `<p class="text-center text-slate-500 py-8">Nenhum banco</p>`}
+                    </div>
+                    
+                </div>
+                
+                <!-- Footer -->
+                <div class="p-4 border-t border-slate-200 dark:border-slate-700 flex justify-end">
+                    <button onclick="closeProjectDetail()" class="px-4 py-2 text-slate-600 hover:text-slate-800 transition-colors">
+                        Fechar
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.getElementById('project-detail-modal').innerHTML = modalHtml;
+    lucide.createIcons();
+}
+
+// Funções auxiliares
+function closeProjectDetail(event) {
+    if (event && event.target !== event.currentTarget) return;
+    document.getElementById('project-detail-modal').innerHTML = '';
+}
+
+function switchProjectTab(tab) {
+    ['transactions', 'subcategories', 'banks'].forEach(t => {
+        document.getElementById('project-tab-' + t).classList.remove('text-purple-600', 'border-b-2', 'border-purple-600');
+        document.getElementById('project-tab-' + t).classList.add('text-slate-500');
+        document.getElementById('project-content-' + t).classList.add('hidden');
+    });
+    
+    document.getElementById('project-tab-' + tab).classList.add('text-purple-600', 'border-b-2', 'border-purple-600');
+    document.getElementById('project-tab-' + tab).classList.remove('text-slate-500');
+    document.getElementById('project-content-' + tab).classList.remove('hidden');
+}
+
+function setProjectsViewMode(mode) {
+    PROJECTS_VIEW_MODE = mode;
+    renderApp();
+}
+</script>
