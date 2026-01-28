@@ -206,6 +206,22 @@ const DataService = {
     const transactions = this.readTransactions(ss, accounts, banks, dreMapping);
     const goals = this.readGoals(ss);
     
+    // Calcula o balance de cada conta baseado nas transações
+    accounts.forEach(function(account) {
+      var balance = 0;
+      transactions.forEach(function(tx) {
+        // Verifica se a transação pertence a esta conta
+        if (tx.accountId === account.id || tx.account === account.name || tx.category === account.name) {
+          if (tx.type === 'Entrada') {
+            balance += tx.value;
+          } else {
+            balance -= tx.value;
+          }
+        }
+      });
+      account.balance = balance;
+    });
+    
     // Obtem informações do plano
     const planInfo = this.getPlanInfo(clientPlan);
     Logger.log('[DataService] Plan Info: ' + JSON.stringify(planInfo));
