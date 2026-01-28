@@ -426,14 +426,16 @@ const DataService = {
     const sheet = ss.getSheetByName('METAS');
     const lastRow = sheet ? Math.max(2, sheet.getLastRow()) : 2;
     if (!sheet || lastRow < 2) return [];
-    const data = sheet.getRange(2, 1, lastRow - 1, 4).getValues();
+    
+    // Estrutura: Categoria, Meta, Tipo (3 colunas)
+    const data = sheet.getRange(2, 1, lastRow - 1, 3).getValues();
     return data
       .filter(row => row[0] && String(row[0]).trim() !== '')
       .map(row => ({
         categoria: String(row[0]).trim(),
         meta: parseFloat(row[1]) || 0,
-        corAlerta: String(row[2]).trim() || 'warning',
-        tipo: String(row[3]).trim() || 'Gasto'
+        tipo: String(row[2]).trim() || 'Gasto',
+        corAlerta: 'warning' // Valor padrão
       }));
   }
 };
