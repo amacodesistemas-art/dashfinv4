@@ -2,16 +2,25 @@
 
 ## Problema Original
 
-O utilizador pretende construir um sistema de dashboard financeiro B2B profissional. A arquitetura consiste em:
-- Frontend responsivo: HTML, JavaScript (ES6+), e Tailwind CSS (via CDN)
-- Backend: Google Apps Script
-- Base de dados: Google Sheets
+Sistema de dashboard financeiro B2B profissional para consultoria financeira atender múltiplos clientes.
 
-Os clientes têm uma vista somente-leitura do dashboard. A equipa do utilizador gere toda a entrada de dados através do Google Sheets.
+## Hierarquia de Dados (ATUALIZADA)
+
+```
+BANCO (onde o dinheiro está fisicamente)
+├── Nubank, Inter, Itaú, Caixa Físico...
+│
+└── CONTA/PROJETO (para que serve o dinheiro)
+    ├── MOTO, CASA, EMPRESA X...
+    │
+    └── TRANSAÇÃO (movimento financeiro)
+        ├── Pertence a 1 BANCO + 1 CONTA
+        └── SUBCATEGORIA (FINANCIAMENTO, MULTA, LUZ...)
+```
+
+**Importante:** Uma CONTA pode movimentar em VÁRIOS bancos.
 
 ## Modelo de Negócio
-
-### Estrutura de Planos
 
 | Plano | Preço | IA | DRE | Alertas | Importação |
 |-------|-------|-----|-----|---------|------------|
@@ -19,47 +28,54 @@ Os clientes têm uma vista somente-leitura do dashboard. A equipa do utilizador 
 | Profissional | R$ 597/mês | 30/mês | ✅ | ❌ | ✅ |
 | Enterprise | R$ 1.297/mês | ∞ | ✅ | ✅ | ✅ |
 
-### Custo de IA por Consulta
-~R$ 0,003 (insignificante) - usando GPT-4o-mini
-
 ## O Que Foi Implementado
 
-### Versão 3.3.0 (Dezembro 2025) ✅ ATUAL
+### Versão 3.4.0 (Dezembro 2025) ✅ ATUAL
 
-#### Visão por Contas Bancárias (`JS_Accounts.html`) ✨ NEW
-- Navegação por abas: Dashboard | Contas | DRE
-- Cards visuais de cada conta com:
-  - Saldo atual e projetado
-  - Entradas e saídas do período
-  - Últimas transações
-  - Barra de progresso entradas vs saídas
-- Modo lista para visão resumida
-- Modal de detalhe por conta com:
-  - Extrato completo filtrado
-  - Análise por categoria
-  - Opção de filtrar dashboard pela conta
+#### Nova Estrutura de Dados
+- **BANCOS** (nova aba): Onde o dinheiro está (Nubank, Inter, etc.)
+- **CONTAS** (renomeada): Projetos/Centros de custo (MOTO, CASA, etc.)
+- **TRANSACOES** com campo Banco
+
+#### Novas Visões no Dashboard
+- **Visão por Bancos**: Saldo, entradas/saídas por banco
+- **Visão por Contas/Projetos**: Gastos por projeto, subcategorias
+- **Navegação por abas**: Dashboard | Bancos | Contas | DRE
 
 #### Arquitetura Multi-Cliente
-- Sistema centralizado para gerenciar 10, 100+ clientes
-- URL única com parâmetro `?client=ID`
-- Planilha ADMIN_MASTER para controle
-- Um deploy = todos os clientes atualizados
-- Log de acessos e uso de IA centralizado
+- Sistema centralizado (1 código = N clientes)
+- ADMIN_MASTER para controle
+- URL com parâmetro ?client=ID
 
-#### Sistema de Alertas Automáticos (`AlertService.js`)
-- 🔴 Fluxo de caixa crítico (projeção negativa)
-- 💰 Inadimplência (faturas atrasadas)
-- 📈 Despesas anormais (+50% da média)
-- 🎯 Metas estouradas ou próximas do limite
-- 📅 Vencimentos do dia
-- 💵 Saldo baixo em contas
-- Interface de alertas no dashboard
+#### Funcionalidades
+- Alertas automáticos (6 tipos)
+- Importação OFX/CSV
+- Categorização com IA
+- Chatbot financeiro
 
-#### Categorização Automática com IA (`CategorizationService.js`)
-- Regras de categorização configuráveis
-- Categorização por IA quando não há regra
-- Aprendizado com correções do usuário
-- Batch processing para importações
+## Estrutura de Abas (Planilha do Cliente)
+
+| Aba | Descrição |
+|-----|-----------|
+| CONFIG | Configurações do cliente |
+| BANCOS | Onde o dinheiro está (NOVO) |
+| CONTAS | Projetos/Centros de custo |
+| TRANSACOES | Movimentações (com campo Banco) |
+| CATEGORIAS | Mapeamento DRE |
+| METAS | Objetivos financeiros |
+| REGRAS_CATEGORIZACAO | Regras de importação |
+
+## Documentação Disponível
+
+| Arquivo | Descrição |
+|---------|-----------|
+| `/app/docs/DOCUMENTACAO_TECNICA_COMPLETA.md` | Guia completo para desenvolvedores |
+| `/app/docs/GUIA_PASSO_A_PASSO_COMPLETO.md` | Setup do sistema |
+| `/app/docs/NOVA_ESTRUTURA_BANCOS.md` | Estrutura de dados |
+| `/app/ROADMAP_COMERCIAL.md` | Precificação e roadmap |
+
+---
+*Última atualização: Dezembro 2025 - v3.4.0*
 
 #### Importação de Extratos (`ImportService.js`)
 - Parser de arquivos OFX (padrão bancário)
