@@ -179,28 +179,51 @@ A planilha de dados de cada cliente precisa ter estas abas:
 | Plano | professional |
 | Nome | Nome da Empresa |
 | CNPJ | 00.000.000/0001-00 |
+| AI_API_KEY | (opcional, se não usar chave global) |
 
-**Aba: CONTAS**
-| ID | Nome | Tipo | Saldo | Icone |
-|----|------|------|-------|-------|
-| 1 | Banco do Brasil | Corrente | 15000 | 🏦 |
-| 2 | Nubank | Digital | 8500 | 💳 |
+**Aba: BANCOS** (Onde o dinheiro FICA - contas bancárias)
+| ID | Nome | Tipo | Saldo | Icone | Agencia | Conta_Numero |
+|----|------|------|-------|-------|---------|--------------|
+| 1 | Nubank | Digital | 10000 | 💜 | | |
+| 2 | Inter | Digital | 5000 | 🧡 | | |
+| 3 | Banco Principal | Corrente | 25000 | 🏦 | 0001 | 12345-6 |
+
+**Aba: CONTAS** (Projetos/Centros de Custo - Para ONDE vai o dinheiro)
+| ID | Nome | Tipo | Icone | Orcamento_Mensal |
+|----|------|------|-------|------------------|
+| 1 | MOTO | Veículo | 🏍️ | 1500 |
+| 2 | CASA | Moradia | 🏠 | 3000 |
+| 3 | EMPRESA CLIENTE | Cliente | 🏢 | 0 |
 
 **Aba: TRANSACOES**
-| Data | Tipo | Categoria | Subcategoria | Valor | Conta | Status | Descrição | Centro de Custo |
-|------|------|-----------|--------------|-------|-------|--------|-----------|-----------------|
-| 2025-01-15 | Entrada | Vendas | Serviços | 5000 | 1 | Recebido | Pagamento Cliente | Projetos |
+| Data | Tipo | Categoria | Subcategoria | Valor | Conta | Banco | Status | Descrição | Centro_Custo |
+|------|------|-----------|--------------|-------|-------|-------|--------|-----------|--------------|
+| 2025-01-15 | Saída | MOTO | FINANCIAMENTO | 800 | 1 | 1 | Pago | Parcela | Pessoal |
+| 2025-01-15 | Saída | CASA | LUZ | 250 | 2 | 2 | Pendente | Conta de luz | Pessoal |
+| 2025-01-15 | Entrada | EMPRESA CLIENTE | SERVIÇOS | 5000 | 3 | 1 | Recebido | Projeto | Comercial |
+
+**IMPORTANTE - Entendendo a Hierarquia de Dados:**
+```
+BANCO (Nubank, Inter, BB...)     ← Onde o dinheiro ESTÁ
+    └── CONTA/PROJETO (MOTO, CASA, EMPRESA X...)  ← Para ONDE vai / De onde vem
+            └── TRANSAÇÃO (Parcela, Conta luz...)  ← O movimento em si
+```
+
+Uma mesma CONTA (ex: MOTO) pode ter transações em DIFERENTES BANCOS.
 
 **Aba: CATEGORIAS**
 | Categoria | Grupo_DRE |
 |-----------|-----------|
-| Vendas | Receita Bruta |
-| Fornecedores | Custos Variáveis |
+| MOTO | Despesas Pessoais |
+| CASA | Despesas Fixas |
+| EMPRESA CLIENTE | Receita de Serviços |
 
 **Aba: METAS**
 | Categoria | Meta | Tipo |
 |-----------|------|------|
-| Marketing | 5000 | Gasto |
+| MOTO | 1500 | Gasto |
+| CASA | 3000 | Gasto |
+| EMPRESA CLIENTE | 10000 | Receita |
 
 ### 4.2 Script para Criar Estrutura Automaticamente
 
