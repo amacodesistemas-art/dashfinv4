@@ -190,12 +190,12 @@ function closeImportModal(event) {
     }
     
     // Limpa estado
-    IMPORT_STATE = { file: null, type: null, accountId: null, preview: [] };
+    IMPORT_STATE = { file: null, type: null, bankId: null, preview: [] };
 }
 
-// Atualiza conta selecionada
-function updateImportAccount(accountId) {
-    IMPORT_STATE.accountId = accountId;
+// Atualiza banco selecionado
+function updateImportBank(bankId) {
+    IMPORT_STATE.bankId = bankId;
     validateImportForm();
 }
 
