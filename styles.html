@@ -56,13 +56,15 @@
     .dark .hover\:bg-slate-50:hover { background-color: #2d3748 !important; }
 
     /* --- EFEITO DE BLUR (PRIVACIDADE) --- */
-    .blur-content {
+    .blur-content,
+    .privacy-blur {
         filter: blur(6px);
         user-select: none;
         cursor: default;
         transition: filter 0.3s ease;
     }
-    .blur-content:hover { filter: blur(2px); }
+    .blur-content:hover,
+    .privacy-blur:hover { filter: blur(2px); }
 
     /* --- SKELETON LOADING (ANIMAÇÃO) --- */
     .skeleton {
