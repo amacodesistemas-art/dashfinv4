@@ -333,31 +333,47 @@ const DataService = {
     return map;
   },
 
-  readTransactions: function(ss, accounts, dreMapping) {
+  readTransactions: function(ss, accounts, banks, dreMapping) {
     const sheet = ss.getSheetByName('TRANSACOES');
     const lastRow = sheet ? Math.max(2, sheet.getLastRow()) : 2;
     if (!sheet || lastRow < 2) return [];
 
+    // Mapeia IDs para nomes
     const accountMap = {};
     accounts.forEach(c => accountMap[c.id] = c.name);
+    
+    const bankMap = {};
+    if (banks && banks.length > 0) {
+      banks.forEach(b => bankMap[b.id] = b.name);
+    }
 
-    // Agora lê até a coluna I (índice 9)
-    const data = sheet.getRange(2, 1, lastRow - 1, 9).getValues();
+    // Lê até a coluna J (10 colunas) para incluir Banco
+    const data = sheet.getRange(2, 1, lastRow - 1, 10).getValues();
     
     return data
       .filter(row => row[0] && row[0] !== '')
       .map(row => {
         const cat = String(row[2]).trim();
+        const accountId = String(row[5]).trim();
+        const bankId = String(row[6]).trim();
+        
         return {
           date: formatDate(row[0]),
           type: String(row[1]).trim(),
           category: cat,
-          dreGroup: dreMapping[cat] || 'Outros', // Classifica pro DRE
+          dreGroup: dreMapping[cat] || 'Outros',
           subcategory: String(row[3]).trim(),
           value: parseFloat(row[4]) || 0,
-          accountId: String(row[5]).trim(),
-          account: accountMap[String(row[5]).trim()] || String(row[5]).trim(),
-          status: String(row[6]).trim(), // Pago ou Pendente
+          accountId: accountId,
+          account: accountMap[accountId] || accountId,
+          bankId: bankId,
+          bank: bankMap[bankId] || bankId || 'Não informado',
+          status: String(row[7]).trim(),
+          description: String(row[8]).trim(),
+          costCenter: String(row[9]).trim()
+        };
+      });
+  },
           description: String(row[7]).trim(),
           costCenter: String(row[8]).trim() // Coluna I: Centro de Custo
         };
