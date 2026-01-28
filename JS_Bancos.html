@@ -1,34 +1,35 @@
 <script>
 // ===================================
-// COMPONENTE DE VISÃO POR CONTAS
+// COMPONENTE DE VISÃO POR BANCOS
 // ===================================
 
-let SELECTED_ACCOUNT = null;
-let ACCOUNTS_VIEW_MODE = 'cards'; // 'cards' ou 'list'
+let SELECTED_BANK = null;
+let BANKS_VIEW_MODE = 'cards'; // 'cards' ou 'list'
 
-// Renderiza seção de contas
-function renderAccountsSection() {
-    const accounts = GLOBAL_DATA.accounts || [];
+// Renderiza seção de bancos
+function renderBanksSection() {
+    const banks = GLOBAL_DATA.banks || [];
     const transactions = GLOBAL_DATA.transactions || [];
     
-    if (accounts.length === 0) {
+    if (banks.length === 0) {
         return `
             <div class="bg-white dark:bg-slate-800 rounded-2xl p-8 text-center">
-                <i data-lucide="wallet" class="w-16 h-16 mx-auto text-slate-300 dark:text-slate-600 mb-4"></i>
-                <h3 class="text-lg font-bold text-slate-800 dark:text-white mb-2">Nenhuma conta cadastrada</h3>
-                <p class="text-slate-500 dark:text-slate-400">Adicione contas na aba CONTAS da planilha.</p>
+                <i data-lucide="landmark" class="w-16 h-16 mx-auto text-slate-300 dark:text-slate-600 mb-4"></i>
+                <h3 class="text-lg font-bold text-slate-800 dark:text-white mb-2">Nenhum banco cadastrado</h3>
+                <p class="text-slate-500 dark:text-slate-400">Adicione bancos na aba BANCOS da planilha.</p>
+                <p class="text-xs text-slate-400 mt-2">Colunas: ID, Nome, Tipo, Saldo, Icone</p>
             </div>
         `;
     }
     
-    // Calcula dados de cada conta
-    const accountsData = accounts.map(acc => {
-        const accTransactions = transactions.filter(t => 
-            String(t.account) === String(acc.id) || t.account === acc.name
+    // Calcula dados de cada banco
+    const banksData = banks.map(bank => {
+        const bankTransactions = transactions.filter(t => 
+            String(t.bankId) === String(bank.id) || t.bank === bank.name
         );
         
         // Transações no período filtrado
-        const filteredTxs = accTransactions.filter(t => {
+        const filteredTxs = bankTransactions.filter(t => {
             const tDate = parseDate(t.date);
             return tDate >= START_DATE && tDate <= END_DATE;
         });
@@ -37,20 +38,23 @@ function renderAccountsSection() {
         const saidas = filteredTxs.filter(t => t.type === 'Saída').reduce((sum, t) => sum + t.value, 0);
         
         // Últimas 5 transações
-        const recentTxs = accTransactions
+        const recentTxs = bankTransactions
             .sort((a, b) => new Date(b.date) - new Date(a.date))
             .slice(0, 5);
         
-        // Pendentes
-        const pendentes = accTransactions.filter(t => 
+        // Pendentes neste banco
+        const pendentes = bankTransactions.filter(t => 
             t.status === 'Pendente' || t.status === 'Agendado'
         );
         const totalPendente = pendentes.reduce((sum, t) => {
             return t.type === 'Entrada' ? sum + t.value : sum - t.value;
         }, 0);
         
+        // Contas/Projetos que usam este banco
+        const contasUsadas = [...new Set(filteredTxs.map(t => t.account))];
+        
         return {
-            ...acc,
+            ...bank,
             transactions: filteredTxs,
             recentTransactions: recentTxs,
             entradas,
@@ -58,39 +62,40 @@ function renderAccountsSection() {
             fluxo: entradas - saidas,
             pendentes: pendentes.length,
             totalPendente,
-            saldoProjetado: acc.balance + totalPendente
+            saldoProjetado: bank.balance + totalPendente,
+            contasUsadas
         };
     });
     
     // Total geral
-    const totalBalance = accountsData.reduce((sum, acc) => sum + (acc.balance || 0), 0);
-    const totalEntradas = accountsData.reduce((sum, acc) => sum + acc.entradas, 0);
-    const totalSaidas = accountsData.reduce((sum, acc) => sum + acc.saidas, 0);
+    const totalBalance = banksData.reduce((sum, b) => sum + (b.balance || 0), 0);
+    const totalEntradas = banksData.reduce((sum, b) => sum + b.entradas, 0);
+    const totalSaidas = banksData.reduce((sum, b) => sum + b.saidas, 0);
     
     return `
-        <!-- Header da Seção de Contas -->
+        <!-- Header da Seção de Bancos -->
         <div class="bg-white dark:bg-slate-800 rounded-2xl p-6 mb-6">
             <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
                 <div>
                     <h2 class="text-xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
                         <i data-lucide="landmark" class="w-6 h-6 text-blue-500"></i>
-                        Visão por Contas
+                        Visão por Bancos
                     </h2>
                     <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">
-                        ${accounts.length} conta(s) • Período: ${formatDateBR(START_DATE)} a ${formatDateBR(END_DATE)}
+                        ${banks.length} banco(s) • Período: ${formatDateBR(START_DATE)} a ${formatDateBR(END_DATE)}
                     </p>
                 </div>
                 
                 <div class="flex items-center gap-2">
                     <!-- Toggle de visualização -->
                     <div class="flex bg-slate-100 dark:bg-slate-700 rounded-lg p-1">
-                        <button onclick="setAccountsViewMode('cards')" 
-                                class="p-2 rounded-lg transition-all ${ACCOUNTS_VIEW_MODE === 'cards' ? 'bg-white dark:bg-slate-600 shadow' : 'hover:bg-white/50'}"
+                        <button onclick="setBanksViewMode('cards')" 
+                                class="p-2 rounded-lg transition-all ${BANKS_VIEW_MODE === 'cards' ? 'bg-white dark:bg-slate-600 shadow' : 'hover:bg-white/50'}"
                                 title="Visualização em Cards">
                             <i data-lucide="layout-grid" class="w-4 h-4"></i>
                         </button>
-                        <button onclick="setAccountsViewMode('list')" 
-                                class="p-2 rounded-lg transition-all ${ACCOUNTS_VIEW_MODE === 'list' ? 'bg-white dark:bg-slate-600 shadow' : 'hover:bg-white/50'}"
+                        <button onclick="setBanksViewMode('list')" 
+                                class="p-2 rounded-lg transition-all ${BANKS_VIEW_MODE === 'list' ? 'bg-white dark:bg-slate-600 shadow' : 'hover:bg-white/50'}"
                                 title="Visualização em Lista">
                             <i data-lucide="list" class="w-4 h-4"></i>
                         </button>
@@ -98,8 +103,8 @@ function renderAccountsSection() {
                 </div>
             </div>
             
-            <!-- Resumo Geral -->
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-xl">
+            <!-- Resumo Geral de Bancos -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-900/20 dark:to-teal-900/20 rounded-xl">
                 <div class="text-center">
                     <p class="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wide">Saldo Total</p>
                     <p class="text-2xl font-bold text-slate-800 dark:text-white privacy-blur">${formatCurrency(totalBalance)}</p>
@@ -121,33 +126,33 @@ function renderAccountsSection() {
             </div>
         </div>
         
-        <!-- Cards/Lista de Contas -->
-        ${ACCOUNTS_VIEW_MODE === 'cards' ? renderAccountsCards(accountsData) : renderAccountsList(accountsData)}
+        <!-- Cards/Lista de Bancos -->
+        ${BANKS_VIEW_MODE === 'cards' ? renderBanksCards(banksData) : renderBanksList(banksData)}
         
-        <!-- Modal de Detalhes (será injetado via JS) -->
-        <div id="account-detail-modal"></div>
+        <!-- Modal de Detalhes -->
+        <div id="bank-detail-modal"></div>
     `;
 }
 
-// Renderiza contas em formato de cards
-function renderAccountsCards(accountsData) {
+// Renderiza bancos em formato de cards
+function renderBanksCards(banksData) {
     return `
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            ${accountsData.map(acc => `
-                <div class="bg-white dark:bg-slate-800 rounded-2xl p-6 border border-slate-200 dark:border-slate-700 hover:shadow-lg hover:border-blue-300 dark:hover:border-blue-600 transition-all cursor-pointer group"
-                     onclick="openAccountDetail('${acc.id}')" data-testid="account-card-${acc.id}">
+            ${banksData.map(bank => `
+                <div class="bg-white dark:bg-slate-800 rounded-2xl p-6 border border-slate-200 dark:border-slate-700 hover:shadow-lg hover:border-emerald-300 dark:hover:border-emerald-600 transition-all cursor-pointer group"
+                     onclick="openBankDetail('${bank.id}')" data-testid="bank-card-${bank.id}">
                     
                     <!-- Header do Card -->
                     <div class="flex items-start justify-between mb-4">
                         <div class="flex items-center gap-3">
-                            <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-2xl shadow-lg">
-                                ${acc.icon || '🏦'}
+                            <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-2xl shadow-lg">
+                                ${bank.icon || '🏦'}
                             </div>
                             <div>
-                                <h3 class="font-bold text-slate-800 dark:text-white group-hover:text-blue-600 transition-colors">
-                                    ${acc.name}
+                                <h3 class="font-bold text-slate-800 dark:text-white group-hover:text-emerald-600 transition-colors">
+                                    ${bank.name}
                                 </h3>
-                                <p class="text-xs text-slate-500 dark:text-slate-400">${acc.type || 'Conta'}</p>
+                                <p class="text-xs text-slate-500 dark:text-slate-400">${bank.type || 'Banco'}</p>
                             </div>
                         </div>
                         <div class="p-2 rounded-lg bg-slate-100 dark:bg-slate-700 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -158,13 +163,13 @@ function renderAccountsCards(accountsData) {
                     <!-- Saldo -->
                     <div class="mb-4">
                         <p class="text-xs text-slate-500 dark:text-slate-400 mb-1">Saldo Atual</p>
-                        <p class="text-3xl font-bold ${acc.balance >= 0 ? 'text-slate-800 dark:text-white' : 'text-red-600'} privacy-blur">
-                            ${formatCurrency(acc.balance || 0)}
+                        <p class="text-3xl font-bold ${bank.balance >= 0 ? 'text-slate-800 dark:text-white' : 'text-red-600'} privacy-blur">
+                            ${formatCurrency(bank.balance || 0)}
                         </p>
-                        ${acc.totalPendente !== 0 ? `
-                            <p class="text-xs mt-1 ${acc.totalPendente >= 0 ? 'text-green-600' : 'text-orange-600'}">
-                                Projetado: ${formatCurrency(acc.saldoProjetado)} 
-                                <span class="text-slate-400">(${acc.pendentes} pendente${acc.pendentes !== 1 ? 's' : ''})</span>
+                        ${bank.totalPendente !== 0 ? `
+                            <p class="text-xs mt-1 ${bank.totalPendente >= 0 ? 'text-green-600' : 'text-orange-600'}">
+                                Projetado: ${formatCurrency(bank.saldoProjetado)} 
+                                <span class="text-slate-400">(${bank.pendentes} pendente${bank.pendentes !== 1 ? 's' : ''})</span>
                             </p>
                         ` : ''}
                     </div>
@@ -173,50 +178,44 @@ function renderAccountsCards(accountsData) {
                     <div class="flex items-center gap-4 mb-4">
                         <div class="flex-1">
                             <div class="flex items-center gap-1 text-green-600 mb-1">
-                                <i data-lucide="trending-up" class="w-3 h-3"></i>
+                                <i data-lucide="arrow-down-left" class="w-3 h-3"></i>
                                 <span class="text-xs">Entradas</span>
                             </div>
-                            <p class="font-bold text-green-600 privacy-blur">${formatCurrencyCompact(acc.entradas)}</p>
+                            <p class="font-bold text-green-600 privacy-blur">${formatCurrencyCompact(bank.entradas)}</p>
                         </div>
                         <div class="w-px h-8 bg-slate-200 dark:bg-slate-700"></div>
                         <div class="flex-1">
                             <div class="flex items-center gap-1 text-red-600 mb-1">
-                                <i data-lucide="trending-down" class="w-3 h-3"></i>
+                                <i data-lucide="arrow-up-right" class="w-3 h-3"></i>
                                 <span class="text-xs">Saídas</span>
                             </div>
-                            <p class="font-bold text-red-600 privacy-blur">${formatCurrencyCompact(acc.saidas)}</p>
+                            <p class="font-bold text-red-600 privacy-blur">${formatCurrencyCompact(bank.saidas)}</p>
                         </div>
                     </div>
                     
                     <!-- Barra de Progresso Entradas vs Saídas -->
                     <div class="h-2 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
-                        ${acc.entradas + acc.saidas > 0 ? `
+                        ${bank.entradas + bank.saidas > 0 ? `
                             <div class="h-full bg-gradient-to-r from-green-500 to-green-400 rounded-full" 
-                                 style="width: ${(acc.entradas / (acc.entradas + acc.saidas) * 100)}%"></div>
+                                 style="width: ${(bank.entradas / (bank.entradas + bank.saidas) * 100)}%"></div>
                         ` : ''}
                     </div>
-                    <p class="text-xs text-slate-400 mt-1 text-center">
-                        ${acc.entradas + acc.saidas > 0 ? `${((acc.entradas / (acc.entradas + acc.saidas)) * 100).toFixed(0)}% entradas` : 'Sem movimentação'}
-                    </p>
                     
-                    <!-- Últimas Transações -->
-                    ${acc.recentTransactions.length > 0 ? `
+                    <!-- Contas que usam este banco -->
+                    ${bank.contasUsadas.length > 0 ? `
                         <div class="mt-4 pt-4 border-t border-slate-100 dark:border-slate-700">
-                            <p class="text-xs text-slate-500 dark:text-slate-400 mb-2">Últimas movimentações</p>
-                            <div class="space-y-2">
-                                ${acc.recentTransactions.slice(0, 3).map(tx => `
-                                    <div class="flex items-center justify-between text-xs">
-                                        <div class="flex items-center gap-2 truncate flex-1">
-                                            <span class="${tx.type === 'Entrada' ? 'text-green-500' : 'text-red-500'}">
-                                                ${tx.type === 'Entrada' ? '↗' : '↘'}
-                                            </span>
-                                            <span class="truncate text-slate-600 dark:text-slate-400">${tx.description || tx.category}</span>
-                                        </div>
-                                        <span class="${tx.type === 'Entrada' ? 'text-green-600' : 'text-red-600'} font-medium privacy-blur">
-                                            ${tx.type === 'Entrada' ? '+' : '-'}${formatCurrencyCompact(tx.value)}
-                                        </span>
-                                    </div>
+                            <p class="text-xs text-slate-500 dark:text-slate-400 mb-2">Contas/Projetos movimentados</p>
+                            <div class="flex flex-wrap gap-1">
+                                ${bank.contasUsadas.slice(0, 4).map(conta => `
+                                    <span class="text-xs px-2 py-1 bg-slate-100 dark:bg-slate-700 rounded-full text-slate-600 dark:text-slate-300">
+                                        ${conta}
+                                    </span>
                                 `).join('')}
+                                ${bank.contasUsadas.length > 4 ? `
+                                    <span class="text-xs px-2 py-1 bg-slate-100 dark:bg-slate-700 rounded-full text-slate-400">
+                                        +${bank.contasUsadas.length - 4}
+                                    </span>
+                                ` : ''}
                             </div>
                         </div>
                     ` : ''}
@@ -226,14 +225,14 @@ function renderAccountsCards(accountsData) {
     `;
 }
 
-// Renderiza contas em formato de lista
-function renderAccountsList(accountsData) {
+// Renderiza bancos em formato de lista
+function renderBanksList(banksData) {
     return `
         <div class="bg-white dark:bg-slate-800 rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700">
             <table class="w-full">
                 <thead class="bg-slate-50 dark:bg-slate-700">
                     <tr>
-                        <th class="text-left p-4 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Conta</th>
+                        <th class="text-left p-4 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Banco</th>
                         <th class="text-right p-4 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Saldo</th>
                         <th class="text-right p-4 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase hidden md:table-cell">Entradas</th>
                         <th class="text-right p-4 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase hidden md:table-cell">Saídas</th>
@@ -242,42 +241,42 @@ function renderAccountsList(accountsData) {
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
-                    ${accountsData.map(acc => `
+                    ${banksData.map(bank => `
                         <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors cursor-pointer"
-                            onclick="openAccountDetail('${acc.id}')">
+                            onclick="openBankDetail('${bank.id}')">
                             <td class="p-4">
                                 <div class="flex items-center gap-3">
-                                    <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-xl">
-                                        ${acc.icon || '🏦'}
+                                    <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-xl">
+                                        ${bank.icon || '🏦'}
                                     </div>
                                     <div>
-                                        <p class="font-medium text-slate-800 dark:text-white">${acc.name}</p>
-                                        <p class="text-xs text-slate-500">${acc.type || 'Conta'}</p>
+                                        <p class="font-medium text-slate-800 dark:text-white">${bank.name}</p>
+                                        <p class="text-xs text-slate-500">${bank.type || 'Banco'}</p>
                                     </div>
                                 </div>
                             </td>
                             <td class="p-4 text-right">
-                                <p class="font-bold ${acc.balance >= 0 ? 'text-slate-800 dark:text-white' : 'text-red-600'} privacy-blur">
-                                    ${formatCurrency(acc.balance || 0)}
+                                <p class="font-bold ${bank.balance >= 0 ? 'text-slate-800 dark:text-white' : 'text-red-600'} privacy-blur">
+                                    ${formatCurrency(bank.balance || 0)}
                                 </p>
-                                ${acc.pendentes > 0 ? `
-                                    <p class="text-xs text-slate-400">${acc.pendentes} pendente(s)</p>
+                                ${bank.pendentes > 0 ? `
+                                    <p class="text-xs text-slate-400">${bank.pendentes} pendente(s)</p>
                                 ` : ''}
                             </td>
                             <td class="p-4 text-right hidden md:table-cell">
-                                <p class="font-medium text-green-600 privacy-blur">${formatCurrency(acc.entradas)}</p>
+                                <p class="font-medium text-green-600 privacy-blur">${formatCurrency(bank.entradas)}</p>
                             </td>
                             <td class="p-4 text-right hidden md:table-cell">
-                                <p class="font-medium text-red-600 privacy-blur">${formatCurrency(acc.saidas)}</p>
+                                <p class="font-medium text-red-600 privacy-blur">${formatCurrency(bank.saidas)}</p>
                             </td>
                             <td class="p-4 text-right">
-                                <p class="font-bold ${acc.fluxo >= 0 ? 'text-green-600' : 'text-red-600'} privacy-blur">
-                                    ${acc.fluxo >= 0 ? '+' : ''}${formatCurrency(acc.fluxo)}
+                                <p class="font-bold ${bank.fluxo >= 0 ? 'text-green-600' : 'text-red-600'} privacy-blur">
+                                    ${bank.fluxo >= 0 ? '+' : ''}${formatCurrency(bank.fluxo)}
                                 </p>
                             </td>
                             <td class="p-4 text-center">
                                 <button class="p-2 hover:bg-slate-100 dark:hover:bg-slate-600 rounded-lg transition-colors"
-                                        onclick="event.stopPropagation(); openAccountDetail('${acc.id}')">
+                                        onclick="event.stopPropagation(); openBankDetail('${bank.id}')">
                                     <i data-lucide="eye" class="w-4 h-4 text-slate-400"></i>
                                 </button>
                             </td>
@@ -289,60 +288,61 @@ function renderAccountsList(accountsData) {
     `;
 }
 
-// Abre modal de detalhe da conta
-function openAccountDetail(accountId) {
-    const accounts = GLOBAL_DATA.accounts || [];
+// Abre modal de detalhe do banco
+function openBankDetail(bankId) {
+    const banks = GLOBAL_DATA.banks || [];
     const transactions = GLOBAL_DATA.transactions || [];
+    const accounts = GLOBAL_DATA.accounts || [];
     
-    const account = accounts.find(a => String(a.id) === String(accountId));
-    if (!account) return;
+    const bank = banks.find(b => String(b.id) === String(bankId));
+    if (!bank) return;
     
-    // Filtra transações da conta
-    const accTransactions = transactions.filter(t => 
-        String(t.account) === String(accountId) || t.account === account.name
+    // Filtra transações do banco
+    const bankTransactions = transactions.filter(t => 
+        String(t.bankId) === String(bankId) || t.bank === bank.name
     ).sort((a, b) => new Date(b.date) - new Date(a.date));
     
     // Filtra pelo período
-    const filteredTxs = accTransactions.filter(t => {
+    const filteredTxs = bankTransactions.filter(t => {
         const tDate = parseDate(t.date);
         return tDate >= START_DATE && tDate <= END_DATE;
     });
     
-    // Agrupa por categoria
-    const byCategory = {};
+    // Agrupa por conta/projeto
+    const byAccount = {};
     filteredTxs.forEach(tx => {
-        const cat = tx.category || 'Outros';
-        if (!byCategory[cat]) {
-            byCategory[cat] = { entradas: 0, saidas: 0, count: 0 };
+        const acc = tx.account || 'Outros';
+        if (!byAccount[acc]) {
+            byAccount[acc] = { entradas: 0, saidas: 0, count: 0 };
         }
         if (tx.type === 'Entrada') {
-            byCategory[cat].entradas += tx.value;
+            byAccount[acc].entradas += tx.value;
         } else {
-            byCategory[cat].saidas += tx.value;
+            byAccount[acc].saidas += tx.value;
         }
-        byCategory[cat].count++;
+        byAccount[acc].count++;
     });
     
     const totalEntradas = filteredTxs.filter(t => t.type === 'Entrada').reduce((sum, t) => sum + t.value, 0);
     const totalSaidas = filteredTxs.filter(t => t.type === 'Saída').reduce((sum, t) => sum + t.value, 0);
     
     const modalHtml = `
-        <div class="fixed inset-0 bg-black/50 z-50 flex items-start justify-center p-4 overflow-y-auto" onclick="closeAccountDetail(event)">
+        <div class="fixed inset-0 bg-black/50 z-50 flex items-start justify-center p-4 overflow-y-auto" onclick="closeBankDetail(event)">
             <div class="bg-white dark:bg-slate-800 rounded-2xl max-w-4xl w-full my-8 overflow-hidden" onclick="event.stopPropagation()">
                 
                 <!-- Header -->
-                <div class="bg-gradient-to-r from-blue-600 to-indigo-600 p-6 text-white">
+                <div class="bg-gradient-to-r from-emerald-600 to-teal-600 p-6 text-white">
                     <div class="flex items-center justify-between">
                         <div class="flex items-center gap-4">
                             <div class="w-16 h-16 rounded-xl bg-white/20 flex items-center justify-center text-3xl">
-                                ${account.icon || '🏦'}
+                                ${bank.icon || '🏦'}
                             </div>
                             <div>
-                                <h2 class="text-2xl font-bold">${account.name}</h2>
-                                <p class="text-blue-100">${account.type || 'Conta'}</p>
+                                <h2 class="text-2xl font-bold">${bank.name}</h2>
+                                <p class="text-emerald-100">${bank.type || 'Banco'}</p>
                             </div>
                         </div>
-                        <button onclick="closeAccountDetail()" class="p-2 hover:bg-white/20 rounded-lg transition-colors">
+                        <button onclick="closeBankDetail()" class="p-2 hover:bg-white/20 rounded-lg transition-colors">
                             <i data-lucide="x" class="w-6 h-6"></i>
                         </button>
                     </div>
@@ -350,15 +350,15 @@ function openAccountDetail(accountId) {
                     <!-- Saldo e Resumo -->
                     <div class="grid grid-cols-3 gap-4 mt-6">
                         <div class="bg-white/10 rounded-xl p-4 text-center">
-                            <p class="text-xs text-blue-100 uppercase">Saldo Atual</p>
-                            <p class="text-2xl font-bold privacy-blur">${formatCurrency(account.balance || 0)}</p>
+                            <p class="text-xs text-emerald-100 uppercase">Saldo Atual</p>
+                            <p class="text-2xl font-bold privacy-blur">${formatCurrency(bank.balance || 0)}</p>
                         </div>
                         <div class="bg-white/10 rounded-xl p-4 text-center">
-                            <p class="text-xs text-blue-100 uppercase">Entradas (período)</p>
+                            <p class="text-xs text-emerald-100 uppercase">Entradas (período)</p>
                             <p class="text-2xl font-bold text-green-300 privacy-blur">${formatCurrency(totalEntradas)}</p>
                         </div>
                         <div class="bg-white/10 rounded-xl p-4 text-center">
-                            <p class="text-xs text-blue-100 uppercase">Saídas (período)</p>
+                            <p class="text-xs text-emerald-100 uppercase">Saídas (período)</p>
                             <p class="text-2xl font-bold text-red-300 privacy-blur">${formatCurrency(totalSaidas)}</p>
                         </div>
                     </div>
@@ -369,18 +369,18 @@ function openAccountDetail(accountId) {
                     
                     <!-- Abas -->
                     <div class="flex gap-2 mb-6 border-b border-slate-200 dark:border-slate-700">
-                        <button onclick="switchAccountTab('transactions')" id="tab-transactions" 
-                                class="px-4 py-2 font-medium text-blue-600 border-b-2 border-blue-600">
-                            Transações
+                        <button onclick="switchBankTab('transactions')" id="bank-tab-transactions" 
+                                class="px-4 py-2 font-medium text-emerald-600 border-b-2 border-emerald-600">
+                            Extrato
                         </button>
-                        <button onclick="switchAccountTab('categories')" id="tab-categories"
+                        <button onclick="switchBankTab('accounts')" id="bank-tab-accounts"
                                 class="px-4 py-2 font-medium text-slate-500 hover:text-slate-700 dark:text-slate-400">
-                            Por Categoria
+                            Por Conta/Projeto
                         </button>
                     </div>
                     
-                    <!-- Tab: Transações -->
-                    <div id="content-transactions">
+                    <!-- Tab: Extrato -->
+                    <div id="bank-content-transactions">
                         ${filteredTxs.length > 0 ? `
                             <div class="space-y-2">
                                 ${filteredTxs.slice(0, 50).map(tx => `
@@ -390,8 +390,12 @@ function openAccountDetail(accountId) {
                                                 <i data-lucide="${tx.type === 'Entrada' ? 'arrow-down-left' : 'arrow-up-right'}" class="w-5 h-5"></i>
                                             </div>
                                             <div>
-                                                <p class="font-medium text-slate-800 dark:text-white">${tx.description || tx.category}</p>
-                                                <p class="text-xs text-slate-500">${formatDateBR(tx.date)} • ${tx.category}</p>
+                                                <p class="font-medium text-slate-800 dark:text-white">${tx.description || tx.subcategory || tx.category}</p>
+                                                <p class="text-xs text-slate-500">
+                                                    ${formatDateBR(tx.date)} • 
+                                                    <span class="text-blue-600">${tx.account}</span>
+                                                    ${tx.subcategory ? ` • ${tx.subcategory}` : ''}
+                                                </p>
                                             </div>
                                         </div>
                                         <div class="text-right">
@@ -416,17 +420,17 @@ function openAccountDetail(accountId) {
                         `}
                     </div>
                     
-                    <!-- Tab: Por Categoria -->
-                    <div id="content-categories" class="hidden">
-                        ${Object.keys(byCategory).length > 0 ? `
+                    <!-- Tab: Por Conta/Projeto -->
+                    <div id="bank-content-accounts" class="hidden">
+                        ${Object.keys(byAccount).length > 0 ? `
                             <div class="space-y-3">
-                                ${Object.entries(byCategory)
+                                ${Object.entries(byAccount)
                                     .sort((a, b) => (b[1].entradas + b[1].saidas) - (a[1].entradas + a[1].saidas))
-                                    .map(([cat, data]) => `
+                                    .map(([acc, data]) => `
                                     <div class="p-4 bg-slate-50 dark:bg-slate-700/50 rounded-xl">
                                         <div class="flex items-center justify-between mb-2">
                                             <div>
-                                                <p class="font-medium text-slate-800 dark:text-white">${cat}</p>
+                                                <p class="font-medium text-slate-800 dark:text-white">${acc}</p>
                                                 <p class="text-xs text-slate-500">${data.count} transação(ões)</p>
                                             </div>
                                             <div class="text-right">
@@ -448,7 +452,7 @@ function openAccountDetail(accountId) {
                             </div>
                         ` : `
                             <div class="text-center py-12">
-                                <p class="text-slate-500 dark:text-slate-400">Nenhuma categoria no período</p>
+                                <p class="text-slate-500 dark:text-slate-400">Nenhuma conta no período</p>
                             </div>
                         `}
                     </div>
@@ -457,10 +461,10 @@ function openAccountDetail(accountId) {
                 
                 <!-- Footer -->
                 <div class="p-4 border-t border-slate-200 dark:border-slate-700 flex justify-end gap-3">
-                    <button onclick="closeAccountDetail()" class="px-4 py-2 text-slate-600 hover:text-slate-800 transition-colors">
+                    <button onclick="closeBankDetail()" class="px-4 py-2 text-slate-600 hover:text-slate-800 transition-colors">
                         Fechar
                     </button>
-                    <button onclick="filterByAccount('${accountId}')" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2">
+                    <button onclick="filterByBank('${bankId}')" class="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors flex items-center gap-2">
                         <i data-lucide="filter" class="w-4 h-4"></i>
                         Filtrar Dashboard
                     </button>
@@ -470,71 +474,48 @@ function openAccountDetail(accountId) {
         </div>
     `;
     
-    document.getElementById('account-detail-modal').innerHTML = modalHtml;
+    document.getElementById('bank-detail-modal').innerHTML = modalHtml;
     lucide.createIcons();
 }
 
-// Fecha modal de detalhe
-function closeAccountDetail(event) {
+// Fecha modal de detalhe do banco
+function closeBankDetail(event) {
     if (event && event.target !== event.currentTarget) return;
-    document.getElementById('account-detail-modal').innerHTML = '';
+    document.getElementById('bank-detail-modal').innerHTML = '';
 }
 
-// Troca aba no modal
-function switchAccountTab(tab) {
-    document.getElementById('tab-transactions').classList.remove('text-blue-600', 'border-b-2', 'border-blue-600');
-    document.getElementById('tab-transactions').classList.add('text-slate-500');
-    document.getElementById('tab-categories').classList.remove('text-blue-600', 'border-b-2', 'border-blue-600');
-    document.getElementById('tab-categories').classList.add('text-slate-500');
+// Troca aba no modal do banco
+function switchBankTab(tab) {
+    document.getElementById('bank-tab-transactions').classList.remove('text-emerald-600', 'border-b-2', 'border-emerald-600');
+    document.getElementById('bank-tab-transactions').classList.add('text-slate-500');
+    document.getElementById('bank-tab-accounts').classList.remove('text-emerald-600', 'border-b-2', 'border-emerald-600');
+    document.getElementById('bank-tab-accounts').classList.add('text-slate-500');
     
-    document.getElementById('content-transactions').classList.add('hidden');
-    document.getElementById('content-categories').classList.add('hidden');
+    document.getElementById('bank-content-transactions').classList.add('hidden');
+    document.getElementById('bank-content-accounts').classList.add('hidden');
     
-    document.getElementById('tab-' + tab).classList.add('text-blue-600', 'border-b-2', 'border-blue-600');
-    document.getElementById('tab-' + tab).classList.remove('text-slate-500');
-    document.getElementById('content-' + tab).classList.remove('hidden');
+    document.getElementById('bank-tab-' + tab).classList.add('text-emerald-600', 'border-b-2', 'border-emerald-600');
+    document.getElementById('bank-tab-' + tab).classList.remove('text-slate-500');
+    document.getElementById('bank-content-' + tab).classList.remove('hidden');
 }
 
 // Muda modo de visualização
-function setAccountsViewMode(mode) {
-    ACCOUNTS_VIEW_MODE = mode;
+function setBanksViewMode(mode) {
+    BANKS_VIEW_MODE = mode;
     renderApp();
 }
 
-// Filtra dashboard por conta
-function filterByAccount(accountId) {
-    SELECTED_ACCOUNT = accountId;
-    closeAccountDetail();
+// Filtra dashboard por banco
+function filterByBank(bankId) {
+    SELECTED_BANK = bankId;
+    closeBankDetail();
     renderApp();
-    showToast('Dashboard filtrado pela conta selecionada', 'info', 3000);
+    showToast('Dashboard filtrado pelo banco selecionado', 'info', 3000);
 }
 
-// Limpa filtro de conta
-function clearAccountFilter() {
-    SELECTED_ACCOUNT = null;
+// Limpa filtro de banco
+function clearBankFilter() {
+    SELECTED_BANK = null;
     renderApp();
-}
-
-// Formata moeda compacta
-function formatCurrencyCompact(value) {
-    if (value >= 1000000) {
-        return 'R$ ' + (value / 1000000).toFixed(1) + 'M';
-    } else if (value >= 1000) {
-        return 'R$ ' + (value / 1000).toFixed(1) + 'k';
-    }
-    return formatCurrency(value);
-}
-
-// Retorna estilo do status
-function getStatusStyle(status) {
-    const styles = {
-        'Pago': 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
-        'Recebido': 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
-        'Concluído': 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
-        'Pendente': 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400',
-        'Agendado': 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
-        'Atrasado': 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
-    };
-    return styles[status] || 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300';
 }
 </script>
