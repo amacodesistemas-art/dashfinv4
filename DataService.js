@@ -377,11 +377,6 @@ const DataService = {
         };
       });
   },
-          description: String(row[7]).trim(),
-          costCenter: String(row[8]).trim() // Coluna I: Centro de Custo
-        };
-      });
-  },
 
   readGoals: function(ss) {
     const sheet = ss.getSheetByName('METAS');
