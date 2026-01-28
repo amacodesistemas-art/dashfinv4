@@ -316,9 +316,35 @@ const DataService = {
     const sheet = ss.getSheetByName('CONFIG');
     const config = {};
     if (sheet) {
-      const data = sheet.getRange('A2:B8').getValues();
-      data.forEach(row => { if (row[0]) config[row[0]] = row[1]; });
+      const lastRow = sheet.getLastRow();
+      if (lastRow >= 1) {
+        const data = sheet.getRange(1, 1, lastRow, 2).getValues();
+        data.forEach(row => { 
+          if (row[0]) {
+            const key = String(row[0]).toLowerCase().trim();
+            const value = row[1];
+            config[row[0]] = value;
+            
+            // Mapeia chaves conhecidas para nomes padronizados
+            if (key === 'nome' || key === 'nome_cliente' || key === 'cliente') {
+              config.nome_cliente = value;
+            }
+            if (key === 'plano' || key === 'plan') {
+              config.plano = value;
+            }
+            if (key === 'cnpj') {
+              config.cnpj = value;
+            }
+          }
+        });
+      }
     }
+    
+    // Valores padrão se não encontrados
+    if (!config.nome_cliente) {
+      config.nome_cliente = config['Nome'] || config['nome'] || 'Cliente';
+    }
+    
     return config;
   },
 
