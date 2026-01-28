@@ -31,7 +31,7 @@ const ValidationService = {
       categoria: { required: true, type: 'string', minLength: 1 },
       meta: { required: true, type: 'number', min: 0 },
       corAlerta: { required: false, type: 'string' },
-      tipo: { required: true, enum: ['Gasto', 'Objetivo'] }
+      tipo: { required: false, enum: ['Gasto', 'Receita', 'Objetivo'] }
     }
   },
   
