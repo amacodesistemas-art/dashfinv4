@@ -22,8 +22,9 @@ const ValidationService = {
       id: { required: true, type: 'string', minLength: 1 },
       name: { required: true, type: 'string', minLength: 1 },
       type: { required: true, type: 'string' },
-      balance: { required: true, type: 'number' },
-      icon: { required: false, type: 'string' }
+      balance: { required: false, type: 'number' },
+      icon: { required: false, type: 'string' },
+      budget: { required: false, type: 'number' }
     },
     
     goal: {
