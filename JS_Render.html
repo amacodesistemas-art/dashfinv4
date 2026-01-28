@@ -247,9 +247,15 @@ function renderAdvancedFilters() {
         const privIcon = document.getElementById('privacy-icon'); if (privIcon) { privIcon.setAttribute('data-lucide', IS_PRIVACY_MODE ? 'eye-off' : 'eye'); }
         
         // Renderiza baseado na aba atual
-        if (CURRENT_TAB === 'accounts') {
-            renderAccountsView();
+        if (CURRENT_TAB === 'banks') {
+            renderBanksView();
+        } else if (CURRENT_TAB === 'projects') {
+            renderProjectsView();
+        } else if (CURRENT_TAB === 'dre') {
+            IS_DRE_MODE = true;
+            renderOverview();
         } else if (CURRENT_VIEW === 'overview') { 
+            IS_DRE_MODE = false;
             renderOverview(); 
         } else if (CURRENT_VIEW === 'account-detail') { 
             renderAccountDetail(); 
@@ -257,17 +263,34 @@ function renderAdvancedFilters() {
         lucide.createIcons();
     }
     
-    // Renderiza a visão de contas
-    function renderAccountsView() {
+    // Renderiza a visão de bancos
+    function renderBanksView() {
         const data = GLOBAL_DATA;
-        const totalPatrimonio = data.accounts.reduce((s, a) => s + a.balance, 0);
         
         const html = `
             <div class="fade-in space-y-6 font-sans text-slate-700 transition-all">
                 ${renderHeader('Dashboard Financeiro', 'Bem-vindo, ' + data.config.nome_cliente)}
                 ${renderTabNavigation()}
                 ${renderFilterBar()}
-                ${renderAccountsSection()}
+                ${typeof renderBanksSection === 'function' ? renderBanksSection() : '<p>Módulo de bancos não carregado</p>'}
+                <div class="h-8"></div>
+            </div>
+        `;
+        
+        document.getElementById('app').innerHTML = html;
+        lucide.createIcons();
+    }
+    
+    // Renderiza a visão de contas/projetos
+    function renderProjectsView() {
+        const data = GLOBAL_DATA;
+        
+        const html = `
+            <div class="fade-in space-y-6 font-sans text-slate-700 transition-all">
+                ${renderHeader('Dashboard Financeiro', 'Bem-vindo, ' + data.config.nome_cliente)}
+                ${renderTabNavigation()}
+                ${renderFilterBar()}
+                ${typeof renderProjectsSection === 'function' ? renderProjectsSection() : '<p>Módulo de projetos não carregado</p>'}
                 <div class="h-8"></div>
             </div>
         `;
