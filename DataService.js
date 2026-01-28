@@ -287,6 +287,7 @@ const DataService = {
     const lastRow = sheet ? Math.max(2, sheet.getLastRow()) : 2;
     if (!sheet || lastRow < 2) return [];
 
+    // Estrutura: ID, Nome, Tipo, Icone, Orcamento_Mensal
     const data = sheet.getRange(2, 1, lastRow - 1, 5).getValues();
     return data
       .filter(row => row[0] && String(row[0]).trim() !== '')
@@ -294,8 +295,11 @@ const DataService = {
         id: String(row[0]),
         name: String(row[1]),
         type: String(row[2]),
-        budget: parseFloat(row[3]) || 0, // Orçamento mensal (opcional)
-        icon: row[4] || '📁'
+        icon: row[3] || '📁',
+        budget: parseFloat(row[4]) || 0,
+        // Para compatibilidade com frontend antigo, balance vem da soma de transações
+        // ou será calculado depois com base nos bancos
+        balance: 0
       }));
   },
   
