@@ -6,10 +6,16 @@
 let SELECTED_BANK = null;
 let BANKS_VIEW_MODE = 'cards'; // 'cards' ou 'list'
 
+// Função helper para classe de blur condicional
+function getBlurClass() {
+    return IS_PRIVACY_MODE ? 'blur-content' : '';
+}
+
 // Renderiza seção de bancos
 function renderBanksSection() {
     const banks = GLOBAL_DATA.banks || [];
     const transactions = GLOBAL_DATA.transactions || [];
+    const blurClass = getBlurClass();
     
     if (banks.length === 0) {
         return `
