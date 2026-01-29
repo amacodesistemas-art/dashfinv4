@@ -202,7 +202,7 @@ var ImportService = {
   },
   
   // Salva transações importadas na planilha
-  saveImportedTransactions: function(ss, transactions, accountId) {
+  saveImportedTransactions: function(ss, transactions, bankId) {
     var sheet = ss.getSheetByName('TRANSACOES');
     if (!sheet) {
       return { error: 'Aba TRANSACOES não encontrada' };
@@ -211,6 +211,7 @@ var ImportService = {
     var saved = 0;
     var errors = [];
     
+    // Estrutura: Data, Tipo, Categoria, Subcategoria, Valor, Conta, Banco, Status, Descrição, Centro_Custo
     transactions.forEach(function(tx, index) {
       try {
         sheet.appendRow([
@@ -219,10 +220,11 @@ var ImportService = {
           tx.category || 'A Classificar',
           tx.subcategory || '',
           tx.value,
-          accountId,
-          'Pendente',
+          tx.accountId || '',        // ID da Conta/Projeto (será categorizado pela IA)
+          bankId,                    // ID do Banco de origem
+          tx.status || 'Pendente',
           tx.description,
-          '' // Centro de custo
+          tx.costCenter || ''        // Centro de custo
         ]);
         saved++;
       } catch (e) {
