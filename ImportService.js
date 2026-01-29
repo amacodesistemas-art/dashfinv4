@@ -240,7 +240,7 @@ var ImportService = {
   },
   
   // Cria aba de conciliação para revisão
-  createReconciliationSheet: function(ss, transactions, importId) {
+  createReconciliationSheet: function(ss, transactions, importId, bankId) {
     var sheetName = 'IMPORT_' + importId;
     var sheet = ss.getSheetByName(sheetName);
     
@@ -250,12 +250,25 @@ var ImportService = {
     
     sheet = ss.insertSheet(sheetName);
     
+    // Busca nome do banco
+    var bankName = 'N/A';
+    var banksSheet = ss.getSheetByName('BANCOS');
+    if (banksSheet) {
+      var banksData = banksSheet.getDataRange().getValues();
+      for (var i = 1; i < banksData.length; i++) {
+        if (String(banksData[i][0]) === String(bankId)) {
+          bankName = banksData[i][1];
+          break;
+        }
+      }
+    }
+    
     // Cabeçalho
     sheet.appendRow([
       'APROVAR', 'DATA', 'DESCRIÇÃO', 'VALOR', 'TIPO', 
-      'CATEGORIA_SUGERIDA', 'CONFIANÇA', 'MÉTODO', 'CONTA'
+      'CONTA_SUGERIDA', 'SUBCATEGORIA', 'CONFIANÇA', 'MÉTODO', 'BANCO'
     ]);
-    sheet.getRange(1, 1, 1, 9).setBackground('#3b82f6').setFontColor('#ffffff').setFontWeight('bold');
+    sheet.getRange(1, 1, 1, 10).setBackground('#3b82f6').setFontColor('#ffffff').setFontWeight('bold');
     
     // Dados
     transactions.forEach(function(tx) {
@@ -266,9 +279,10 @@ var ImportService = {
         tx.value,
         tx.transactionType || tx.type,
         tx.category || 'A Classificar',
+        tx.subcategory || '',
         tx.confidence ? (tx.confidence * 100).toFixed(0) + '%' : '-',
         tx.method || '-',
-        tx.account || ''
+        bankName + ' (ID: ' + bankId + ')'
       ]);
     });
     
@@ -286,10 +300,21 @@ var ImportService = {
     sheet.setColumnWidth(2, 100);
     sheet.setColumnWidth(3, 300);
     sheet.setColumnWidth(4, 120);
+    sheet.setColumnWidth(6, 150);
+    sheet.setColumnWidth(7, 150);
+    sheet.setColumnWidth(10, 150);
+    
+    // Adiciona nota explicativa
+    sheet.getRange(lastRow + 2, 1).setValue('📌 Instruções:');
+    sheet.getRange(lastRow + 3, 1).setValue('1. Revise as categorias sugeridas pela IA');
+    sheet.getRange(lastRow + 4, 1).setValue('2. Corrija as que estiverem erradas (o sistema aprende com suas correções)');
+    sheet.getRange(lastRow + 5, 1).setValue('3. Desmarque as transações que não deseja importar');
+    sheet.getRange(lastRow + 6, 1).setValue('4. Execute a função "aprovarImportacao" para finalizar');
     
     return {
       sheetName: sheetName,
-      url: ss.getUrl() + '#gid=' + sheet.getSheetId()
+      url: ss.getUrl() + '#gid=' + sheet.getSheetId(),
+      bankId: bankId
     };
   },
   
