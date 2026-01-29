@@ -1,1006 +1,671 @@
-# 📚 Documentação Técnica Completa - Dashboard Financeiro B2B
+# 📚 DOCUMENTAÇÃO TÉCNICA COMPLETA
+## Sistema de Dashboard Financeiro Multi-Tenant B2B
 
-## Índice
+---
+
+## 📋 ÍNDICE
+
 1. [Visão Geral da Arquitetura](#1-visão-geral-da-arquitetura)
-2. [Estrutura de Dados (Planilhas)](#2-estrutura-de-dados)
-3. [Código para Criar Planilha do Cliente](#3-código-criação-planilha)
-4. [Documentação dos Arquivos .gs (Backend)](#4-arquivos-gs)
-5. [Documentação dos Arquivos .html (Frontend)](#5-arquivos-html)
-6. [Sistema Multi-Cliente (ADMIN)](#6-sistema-admin)
-7. [Análise de Escalabilidade](#7-escalabilidade)
-8. [Guia de Manutenção](#8-manutenção)
+2. [Estrutura de Arquivos](#2-estrutura-de-arquivos)
+3. [Fluxo de Dados](#3-fluxo-de-dados)
+4. [Backend (Google Apps Script)](#4-backend-google-apps-script)
+5. [Frontend (HTML/JavaScript)](#5-frontend-htmljavascript)
+6. [Sistema de Planos](#6-sistema-de-planos)
+7. [Modelo de Dados](#7-modelo-de-dados)
+8. [Integrações](#8-integrações)
+9. [Guia de Manutenção](#9-guia-de-manutenção)
 
 ---
 
-## 1. Visão Geral da Arquitetura
+## 1. VISÃO GERAL DA ARQUITETURA
 
-### Diagrama Geral
+### 1.1 Arquitetura Multi-Tenant
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                         GOOGLE APPS SCRIPT                          │
-│                     (Projeto Único - Backend)                       │
-│                                                                     │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐                │
-│  │   Main.gs   │  │DataService  │  │AdminService │                │
-│  │  Entrypoint │  │   .gs       │  │    .gs      │                │
-│  └─────────────┘  └─────────────┘  └─────────────┘                │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐                │
-│  │AlertService │  │Categoriz.   │  │ImportService│                │
-│  │    .gs      │  │Service.gs   │  │    .gs      │                │
-│  └─────────────┘  └─────────────┘  └─────────────┘                │
-│                                                                     │
-│  ┌─────────────────────────────────────────────────────────────┐   │
-│  │                    FRONTEND (HTML Files)                     │   │
-│  │  index.html, JS_Core, JS_Render, JS_Bancos, JS_Contas, etc. │   │
-│  └─────────────────────────────────────────────────────────────┘   │
-│                                                                     │
-│                    Publicado como WEB APP                           │
-│            https://script.google.com/.../exec                       │
+│                    PLANILHA DO PROJETO (COM CÓDIGO)                  │
+│                    ════════════════════════════════                  │
+│  📁 Contém todos os arquivos .gs e .html                            │
+│  📌 É DAQUI que você publica o Web App                              │
+│  🔗 Link único: https://script.google.com/.../exec                  │
 └─────────────────────────────────────────────────────────────────────┘
-                                  │
-                                  │ ?client=xxx
-                                  ▼
+                                    │
+                                    │ ?client=XXX
+                                    ▼
 ┌─────────────────────────────────────────────────────────────────────┐
-│                      ADMIN_MASTER (Planilha)                        │
-│                                                                     │
-│  CLIENTES: client_id → spreadsheet_id → plano                      │
-│  CONFIG_GLOBAL: API keys, limites                                   │
-│  LOG_SISTEMA: Acessos e eventos                                     │
+│                         ADMIN_MASTER                                 │
+│                         ════════════                                 │
+│  📊 Base de dados central de clientes                               │
+│  📋 Abas: CLIENTES, CONFIG_GLOBAL, LOG_SISTEMA                      │
 └─────────────────────────────────────────────────────────────────────┘
-                                  │
-          ┌───────────────────────┼───────────────────────┐
-          ▼                       ▼                       ▼
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│ PLANILHA        │    │ PLANILHA        │    │ PLANILHA        │
-│ CLIENTE A       │    │ CLIENTE B       │    │ CLIENTE C       │
-│                 │    │                 │    │                 │
-│ - BANCOS        │    │ - BANCOS        │    │ - BANCOS        │
-│ - CONTAS        │    │ - CONTAS        │    │ - CONTAS        │
-│ - TRANSACOES    │    │ - TRANSACOES    │    │ - TRANSACOES    │
-│ - CATEGORIAS    │    │ - CATEGORIAS    │    │ - CATEGORIAS    │
-│ - METAS         │    │ - METAS         │    │ - METAS         │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
+                                    │
+                                    ▼
+          ┌─────────────────────────┼─────────────────────────┐
+          ▼                         ▼                         ▼
+┌─────────────────┐       ┌─────────────────┐       ┌─────────────────┐
+│  CLIENTE A      │       │  CLIENTE B      │       │  CLIENTE C      │
+│  (Planilha)     │       │  (Planilha)     │       │  (Planilha)     │
+│  ────────────   │       │  ────────────   │       │  ────────────   │
+│  - BANCOS       │       │  - BANCOS       │       │  - BANCOS       │
+│  - CONTAS       │       │  - CONTAS       │       │  - CONTAS       │
+│  - TRANSACOES   │       │  - TRANSACOES   │       │  - TRANSACOES   │
+│  - CONFIG       │       │  - CONFIG       │       │  - CONFIG       │
+└─────────────────┘       └─────────────────┘       └─────────────────┘
 ```
 
-### Hierarquia de Dados
+### 1.2 Hierarquia de Dados
 
 ```
-BANCO (onde o dinheiro está)
-   └── Nubank, Inter, Itaú, Caixa Físico...
+BANCO (Nubank, Inter, Itaú...)     ← Onde o dinheiro ESTÁ
+    └── CONTA/PROJETO (MOTO, CASA, EMPRESA X...)  ← Para ONDE vai / De onde vem
+            └── TRANSAÇÃO (Parcela, Conta luz...)  ← O movimento em si
+```
+
+**Importante:** Uma mesma CONTA pode ter transações em DIFERENTES BANCOS.
+
+---
+
+## 2. ESTRUTURA DE ARQUIVOS
+
+### 2.1 Backend (.gs)
+
+| Arquivo | Função | Funções Principais |
+|---------|--------|-------------------|
+| `Main.js` | Entry point | `doGet()`, `include()`, `getClientData()` |
+| `Config.js` | Configurações | `getSpreadsheetId()`, `getAPIKey()`, `getCacheConfig()` |
+| `AdminService.js` | Multi-tenant | `getClientById()`, `isMultiClientMode()`, `log()` |
+| `DataService.js` | Dados | `fetchAllData()`, `readTransactions()`, `readAccounts()`, `readBanks()` |
+| `Controller.js` | Orquestração | `calculateStats()`, `getTransactionsByRange()` |
+| `ImportService.js` | Importação | `parseOFX()`, `parseCSV()`, `importOFXFile()` |
+| `CategorizationService.js` | IA | `categorize()`, `categorizeBatch()`, `learnFromCorrection()` |
+| `AlertService.js` | Alertas | `checkAlerts()`, `sendAlert()` |
+| `ValidationService.js` | Validação | `validateData()`, `validateTransaction()` |
+| `AIService.js` | OpenAI | `callOpenAI()`, `buildPrompt()` |
+| `PlanManager.js` | Planos | `checkFeature()`, `getUsage()` |
+| `CacheManager.js` | Cache | `get()`, `set()`, `clear()` |
+| `Utils.js` | Utilitários | `formatDate()`, `formatCurrency()` |
+
+### 2.2 Frontend (.html)
+
+| Arquivo | Função | Descrição |
+|---------|--------|-----------|
+| `index.html` | Container | HTML principal, carrega todos os módulos |
+| `styles.html` | CSS | Estilos, dark mode, animações |
+| `JS_Core.html` | Variáveis | Variáveis globais, formatadores |
+| `JS_Init.html` | Inicialização | Carrega dados, registra Service Worker |
+| `JS_Render.html` | Renderização | Dashboard principal, navegação, KPIs |
+| `JS_Logic.html` | Lógica | Cálculos, filtros, estatísticas |
+| `JS_Charts.html` | Gráficos | Chart.js, gráficos de fluxo |
+| `JS_Bancos.html` | Visão Bancos | Interface de bancos |
+| `JS_Contas.html` | Visão Contas | Interface de contas/projetos |
+| `JS_ChatAI.html` | Chat IA | Chatbot financeiro |
+| `JS_Import.html` | Importação | Modal de importação OFX/CSV |
+| `JS_Alerts.html` | Alertas | Sistema de alertas |
+| `JS_FeatureFlags.html` | Features | Controle de planos |
+| `JS_Events.html` | Eventos | Handlers de eventos |
+| `JS_Keyboard.html` | Atalhos | Atalhos de teclado |
+| `JS_Components.html` | UI | Componentes reutilizáveis |
+| `JS_Onboarding.html` | Onboarding | Tutorial inicial |
+| `service-worker.html` | PWA | Cache offline |
+
+---
+
+## 3. FLUXO DE DADOS
+
+### 3.1 Fluxo de Acesso (Multi-Tenant)
+
+```
+1. Usuário acessa URL:
+   https://script.google.com/.../exec?client=empresa_x
    
-CONTA/PROJETO (para que serve)
-   └── MOTO, CASA, EMPRESA X, INVESTIMENTOS...
+2. Main.js (doGet):
+   - Lê parâmetro ?client=empresa_x
+   - Chama AdminService.getClientById('empresa_x')
    
-TRANSAÇÃO (movimento financeiro)
-   └── Pertence a 1 BANCO + 1 CONTA
-   └── Tem SUBCATEGORIA (FINANCIAMENTO, MULTA, SEGURO...)
+3. AdminService:
+   - Abre ADMIN_MASTER
+   - Busca na aba CLIENTES o registro com client_id='empresa_x'
+   - Retorna { spreadsheet_id: '1ABC...', plano: 'professional', ... }
+   
+4. Main.js:
+   - Salva CURRENT_CLIENT_ID e CURRENT_SPREADSHEET_ID no PropertiesService
+   - Retorna index.html
+   
+5. Frontend (JS_Init.html):
+   - Chama google.script.run.getClientData()
+   
+6. Config.js (getSpreadsheetId):
+   - Lê CURRENT_SPREADSHEET_ID do PropertiesService
+   - Retorna ID da planilha do cliente
+   
+7. DataService.fetchAllData():
+   - Abre planilha do cliente
+   - Lê todas as abas (BANCOS, CONTAS, TRANSACOES, etc.)
+   - Retorna JSON com todos os dados
+   
+8. Frontend:
+   - Recebe dados via callback
+   - Renderiza dashboard
+```
+
+### 3.2 Fluxo de Importação
+
+```
+1. Usuário clica "Importar" → abre modal
+2. Seleciona BANCO de origem do extrato
+3. Faz upload do arquivo OFX/CSV
+4. Frontend chama: google.script.run.importOFXFile(content, bankId)
+
+5. Backend (ImportService):
+   a. Parse do arquivo (parseOFX ou parseCSV)
+   b. Detecta duplicatas (findDuplicates)
+   c. Categoriza via IA (CategorizationService.categorizeBatch)
+   d. Cria aba de conciliação (IMPORT_timestamp)
+   
+6. Retorna URL da aba de conciliação
+
+7. Usuário revisa na planilha:
+   - Corrige categorias erradas (IA aprende)
+   - Desmarca transações indesejadas
+   
+8. Executa aprovação → transações vão para TRANSACOES
 ```
 
 ---
 
-## 2. Estrutura de Dados
+## 4. BACKEND (GOOGLE APPS SCRIPT)
 
-### 2.1 Planilha do Cliente - Abas Necessárias
-
-#### Aba: CONFIG
-| Coluna A | Coluna B | Descrição |
-|----------|----------|-----------|
-| Plano | professional | basic/professional/enterprise |
-| Nome | Empresa XPTO | Nome do cliente |
-| CNPJ | 00.000.000/0001-00 | Documento |
-| AI_API_KEY | sk-xxx (opcional) | Chave OpenAI própria |
-
-#### Aba: BANCOS (NOVA)
-| ID | Nome | Tipo | Saldo | Icone | Agencia | Conta_Numero |
-|----|------|------|-------|-------|---------|--------------|
-| 1 | Nubank | Digital | 10000 | 💜 | | |
-| 2 | Inter | Digital | 5000 | 🧡 | | |
-| 3 | Itaú | Corrente | 25000 | 🏦 | 1234 | 56789-0 |
-| 4 | Caixa Físico | Dinheiro | 500 | 💵 | | |
-
-**Tipos válidos:** Digital, Corrente, Poupança, Investimento, Dinheiro, Cartão de Crédito
-
-#### Aba: CONTAS (Projetos/Centros de Custo)
-| ID | Nome | Tipo | Icone | Orcamento_Mensal |
-|----|------|------|-------|------------------|
-| 1 | MOTO | Veículo | 🏍️ | 1500 |
-| 2 | CASA | Moradia | 🏠 | 3000 |
-| 3 | EMPRESA ABC | Cliente | 🏢 | 0 |
-| 4 | INVESTIMENTOS | Pessoal | 📈 | 2000 |
-
-#### Aba: TRANSACOES
-| Data | Tipo | Categoria | Subcategoria | Valor | Conta | Banco | Status | Descrição | Centro_Custo |
-|------|------|-----------|--------------|-------|-------|-------|--------|-----------|--------------|
-| 2025-01-15 | Saída | MOTO | FINANCIAMENTO | 800 | 1 | 1 | Pago | Parcela 5/48 | Pessoal |
-| 2025-01-16 | Saída | MOTO | SEGURO | 200 | 1 | 2 | Pago | Seguro anual | Pessoal |
-| 2025-01-17 | Entrada | EMPRESA ABC | SERVIÇOS | 5000 | 3 | 1 | Recebido | Projeto X | Comercial |
-
-**Campos importantes:**
-- **Data:** Formato YYYY-MM-DD
-- **Tipo:** Entrada ou Saída
-- **Categoria:** Nome da CONTA/PROJETO (MOTO, CASA, etc.)
-- **Subcategoria:** Detalhe (FINANCIAMENTO, MULTA, LUZ, etc.)
-- **Valor:** Número decimal (sem R$)
-- **Conta:** ID da aba CONTAS
-- **Banco:** ID da aba BANCOS
-- **Status:** Pago, Pendente, Recebido, Atrasado, Agendado
-
-#### Aba: CATEGORIAS (Mapeamento DRE)
-| Categoria | Grupo_DRE |
-|-----------|-----------|
-| MOTO | Despesas Pessoais |
-| CASA | Despesas Fixas |
-| EMPRESA ABC | Receita de Serviços |
-| INVESTIMENTOS | Investimentos |
-
-#### Aba: METAS
-| Categoria | Meta | Tipo |
-|-----------|------|------|
-| MOTO | 1500 | Gasto |
-| CASA | 3000 | Gasto |
-| EMPRESA ABC | 10000 | Receita |
-
-#### Aba: REGRAS_CATEGORIZACAO (Para importação automática)
-| padrao | categoria | subcategoria | tipo |
-|--------|-----------|--------------|------|
-| pix recebido | EMPRESA ABC | SERVIÇOS | Entrada |
-| financiamento moto | MOTO | FINANCIAMENTO | Saída |
-| energia elet | CASA | LUZ | Saída |
-| aluguel | CASA | ALUGUEL | Saída |
-
----
-
-## 3. Código para Criar Planilha do Cliente
-
-Cole e execute este código no Apps Script da planilha do cliente:
+### 4.1 Main.js - Entry Point
 
 ```javascript
-// ===========================================
-// SCRIPT PARA CRIAR ESTRUTURA COMPLETA
-// Execute: criarEstruturaCompleta()
-// ===========================================
-
-function criarEstruturaCompleta() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+function doGet(e) {
+  // Verifica requisições especiais (service worker, manifest)
+  if (e.parameter.file === 'sw') { ... }
+  if (e.parameter.file === 'manifest') { ... }
   
-  Logger.log('🚀 Iniciando criação da estrutura...');
-  
-  // 1. CONFIG
-  criarAbaConfig(ss);
-  
-  // 2. BANCOS
-  criarAbaBancos(ss);
-  
-  // 3. CONTAS
-  criarAbaContas(ss);
-  
-  // 4. TRANSACOES
-  criarAbaTransacoes(ss);
-  
-  // 5. CATEGORIAS
-  criarAbaCategorias(ss);
-  
-  // 6. METAS
-  criarAbaMetas(ss);
-  
-  // 7. REGRAS_CATEGORIZACAO
-  criarAbaRegras(ss);
-  
-  // Remove aba padrão se existir
-  var sheet1 = ss.getSheetByName('Sheet1') || ss.getSheetByName('Página1');
-  if (sheet1 && ss.getSheets().length > 1) {
-    ss.deleteSheet(sheet1);
+  // Modo multi-cliente
+  var clientId = e.parameter.client;
+  if (clientId && AdminService.isMultiClientMode()) {
+    var client = AdminService.getClientById(clientId);
+    // Salva no PropertiesService para uso posterior
+    props.setProperty('CURRENT_CLIENT_ID', clientId);
+    props.setProperty('CURRENT_SPREADSHEET_ID', client.spreadsheet_id);
   }
   
-  Logger.log('✅ Estrutura criada com sucesso!');
-  Logger.log('📋 ID da planilha: ' + ss.getId());
-  Logger.log('🔗 URL: ' + ss.getUrl());
+  return HtmlService.createTemplateFromFile('index').evaluate();
+}
+
+function getClientData() {
+  return JSON.stringify(DataService.fetchAllData());
+}
+```
+
+### 4.2 Config.js - Configurações Dinâmicas
+
+```javascript
+function getSpreadsheetId() {
+  // 1. Verifica cliente ativo (multi-tenant)
+  var props = PropertiesService.getUserProperties();
+  var clientSpreadsheetId = props.getProperty('CURRENT_SPREADSHEET_ID');
+  if (clientSpreadsheetId) return clientSpreadsheetId;
   
-  return {
-    id: ss.getId(),
-    url: ss.getUrl()
+  // 2. Verifica modo multi-cliente
+  if (AdminService.isMultiClientMode()) return null;
+  
+  // 3. Fallback: modo single-tenant
+  return DEFAULT_SPREADSHEET_ID;
+}
+
+function getAPIKey(ss) {
+  // Tenta da planilha do cliente
+  // Se não encontrar, busca da CONFIG_GLOBAL na ADMIN_MASTER
+}
+```
+
+### 4.3 DataService.js - Leitura de Dados
+
+```javascript
+const DataService = {
+  // Sistema de Planos
+  PLANS: { BASIC: 'basic', PROFESSIONAL: 'professional', ENTERPRISE: 'enterprise' },
+  
+  PLAN_FEATURES: {
+    'basic': { ai_queries_limit: 0, features: { dre: false, ai_insights: false } },
+    'professional': { ai_queries_limit: 30, features: { dre: true, ai_insights: true } },
+    'enterprise': { ai_queries_limit: -1, features: { ... } }
+  },
+  
+  fetchAllData: function() {
+    var ss = SpreadsheetApp.openById(getSpreadsheetId());
+    var accounts = this.readAccounts(ss);
+    var banks = this.readBanks(ss);
+    var transactions = this.readTransactions(ss, accounts, banks, dreMapping);
+    
+    // Calcula balance de cada conta baseado nas transações
+    accounts.forEach(function(account) {
+      var balance = 0;
+      transactions.forEach(function(tx) {
+        if (tx.accountId === account.id) {
+          balance += tx.type === 'Entrada' ? tx.value : -tx.value;
+        }
+      });
+      account.balance = balance;
+    });
+    
+    return { config, accounts, banks, transactions, goals, plan, validation };
+  },
+  
+  readBanks: function(ss) {
+    // Estrutura: ID, Nome, Tipo, Saldo, Icone, Agencia, Conta_Numero
+  },
+  
+  readAccounts: function(ss) {
+    // Estrutura: ID, Nome, Tipo, Icone, Orcamento_Mensal
+  },
+  
+  readTransactions: function(ss, accounts, banks, dreMapping) {
+    // Estrutura: Data, Tipo, Categoria, Subcategoria, Valor, Conta, Banco, Status, Descrição, Centro_Custo
+  }
+};
+```
+
+### 4.4 AdminService.js - Multi-Tenancy
+
+```javascript
+var AdminService = {
+  ADMIN_SPREADSHEET_ID: null, // Lido de PropertiesService
+  
+  isMultiClientMode: function() {
+    return this.getAdminSpreadsheetId() !== null;
+  },
+  
+  getClientById: function(clientId) {
+    var ss = SpreadsheetApp.openById(this.getAdminSpreadsheetId());
+    var sheet = ss.getSheetByName('CLIENTES');
+    var data = sheet.getDataRange().getValues();
+    
+    for (var i = 1; i < data.length; i++) {
+      if (data[i][0] === clientId) {
+        return {
+          client_id: data[i][0],
+          nome: data[i][1],
+          spreadsheet_id: data[i][2],
+          plano: data[i][3],
+          status: data[i][4]
+        };
+      }
+    }
+    return null;
+  },
+  
+  log: function(clientId, action, message) {
+    // Registra na aba LOG_SISTEMA
+  }
+};
+```
+
+### 4.5 CategorizationService.js - IA
+
+```javascript
+var CategorizationService = {
+  categorize: function(transaction, ss, apiKey) {
+    // 1. Tenta por regras manuais (REGRAS_CATEGORIZACAO)
+    var ruleMatch = this.matchRule(transaction.description, ss);
+    if (ruleMatch) return { ...ruleMatch, method: 'rule', confidence: 1.0 };
+    
+    // 2. Tenta por IA
+    if (apiKey) {
+      var aiResult = this.categorizeWithAI(transaction, ss, apiKey);
+      if (aiResult) return { ...aiResult, method: 'ai' };
+    }
+    
+    // 3. Fallback
+    return { category: 'A Classificar', method: 'default', confidence: 0 };
+  },
+  
+  learnFromCorrection: function(ss, description, correctCategory, correctType) {
+    // Adiciona nova regra na aba REGRAS_CATEGORIZACAO
+    // Próximas transações similares serão categorizadas automaticamente
+  }
+};
+```
+
+---
+
+## 5. FRONTEND (HTML/JAVASCRIPT)
+
+### 5.1 Variáveis Globais (JS_Core.html)
+
+```javascript
+let GLOBAL_DATA = null;           // Dados do backend
+let CURRENT_VIEW = 'overview';    // Visão atual
+let CURRENT_TAB = 'dashboard';    // Aba atual (dashboard, banks, projects, dre)
+let IS_PRIVACY_MODE = false;      // Modo privacidade (blur valores)
+let IS_DRE_MODE = false;          // Visão DRE ativa
+let START_DATE, END_DATE;         // Filtro de período
+let FILTER_MODE = 'this_month';   // Modo de filtro
+let CURRENT_PAGE = 1;             // Paginação
+let ITEMS_PER_PAGE = 15;
+let ADVANCED_FILTERS = { category: '', type: '', status: '', costCenter: '' };
+```
+
+### 5.2 Inicialização (JS_Init.html)
+
+```javascript
+function init() {
+  // Define período inicial (mês atual)
+  START_DATE = new Date(now.getFullYear(), now.getMonth(), 1);
+  END_DATE = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  
+  // Carrega dados do backend
+  google.script.run
+    .withSuccessHandler(function(jsonTexto) {
+      GLOBAL_DATA = JSON.parse(jsonTexto);
+      initFeatureFlags();  // Sistema de planos
+      renderApp();         // Renderiza dashboard
+      initChat();          // Chat IA
+      loadAlerts();        // Alertas
+    })
+    .getClientData();
+}
+```
+
+### 5.3 Renderização (JS_Render.html)
+
+```javascript
+function renderApp() {
+  if (CURRENT_TAB === 'banks') {
+    renderBanksView();
+  } else if (CURRENT_TAB === 'projects') {
+    renderProjectsView();
+  } else if (CURRENT_TAB === 'dre') {
+    renderOverview();  // Com IS_DRE_MODE = true
+  } else {
+    renderOverview();
+  }
+}
+
+function renderTabNavigation() {
+  var tabs = [
+    { id: 'dashboard', label: 'Visão Geral', icon: 'layout-dashboard' },
+    { id: 'banks', label: 'Bancos', icon: 'landmark' },
+    { id: 'projects', label: 'Contas/Projetos', icon: 'folder-kanban' }
+  ];
+  
+  if (hasFeature('dre')) {
+    tabs.push({ id: 'dre', label: 'DRE', icon: 'file-bar-chart' });
+  }
+  // ...
+}
+```
+
+### 5.4 Sistema de Features (JS_FeatureFlags.html)
+
+```javascript
+var FEATURE_FLAGS = {};
+var CURRENT_PLAN = null;
+
+function initFeatureFlags() {
+  if (GLOBAL_DATA && GLOBAL_DATA.plan) {
+    CURRENT_PLAN = GLOBAL_DATA.plan;
+    FEATURE_FLAGS = CURRENT_PLAN.features || {};
+  }
+}
+
+function hasFeature(featureName) {
+  return FEATURE_FLAGS[featureName] === true;
+}
+
+function renderPlanBadge() {
+  if (!CURRENT_PLAN) return '';
+  return `<span class="px-3 py-1 rounded-full text-xs font-bold ...">
+    ${CURRENT_PLAN.name}
+  </span>`;
+}
+```
+
+---
+
+## 6. SISTEMA DE PLANOS
+
+### 6.1 Planos Disponíveis
+
+| Plano | Preço | IA Queries | Principais Features |
+|-------|-------|------------|---------------------|
+| **Básico** | R$ 297/mês | 0 | Dashboard, Filtros, CSV, Gráficos, Metas |
+| **Profissional** | R$ 597/mês | 30/mês | + DRE, PDF, IA Insights |
+| **Enterprise** | R$ 1.297/mês | Ilimitado | + Alertas, Previsões, WhatsApp, Benchmarks |
+
+### 6.2 Matriz de Features
+
+| Feature | Básico | Profissional | Enterprise |
+|---------|--------|--------------|------------|
+| Dashboard | ✅ | ✅ | ✅ |
+| Filtros de Data | ✅ | ✅ | ✅ |
+| Exportar CSV | ✅ | ✅ | ✅ |
+| Exportar PDF | ❌ | ✅ | ✅ |
+| Gráficos | ✅ | ✅ | ✅ |
+| Metas | ✅ | ✅ | ✅ |
+| DRE Gerencial | ❌ | ✅ | ✅ |
+| Chat IA | ❌ | ✅ (30/mês) | ✅ (∞) |
+| Alertas Automáticos | ❌ | ❌ | ✅ |
+| Previsões | ❌ | ❌ | ✅ |
+| Relatórios WhatsApp | ❌ | ❌ | ✅ |
+| Benchmarking | ❌ | ❌ | ✅ |
+
+### 6.3 Configuração de Plano
+
+**Na ADMIN_MASTER (aba CLIENTES):**
+```
+| client_id | nome | spreadsheet_id | plano | status |
+|-----------|------|----------------|-------|--------|
+| empresa_x | Empresa X | 1ABC... | professional | ativo |
+```
+
+**Na planilha do cliente (aba CONFIG):**
+```
+| Plano | profissional |
+```
+
+---
+
+## 7. MODELO DE DADOS
+
+### 7.1 ADMIN_MASTER (Central)
+
+**Aba: CLIENTES**
+| Campo | Tipo | Descrição |
+|-------|------|-----------|
+| client_id | string | Identificador único (usado na URL) |
+| nome | string | Nome do cliente/empresa |
+| spreadsheet_id | string | ID da planilha de dados do cliente |
+| plano | string | basic, professional, enterprise |
+| status | string | ativo, suspenso, cancelado |
+| ultimo_acesso | datetime | Último acesso ao dashboard |
+
+**Aba: CONFIG_GLOBAL**
+| Campo | Tipo | Descrição |
+|-------|------|-----------|
+| openai_api_key | string | Chave da API OpenAI |
+| max_ai_queries_basic | number | Limite de queries para plano básico |
+
+**Aba: LOG_SISTEMA**
+| Campo | Tipo | Descrição |
+|-------|------|-----------|
+| timestamp | datetime | Data/hora do evento |
+| client_id | string | Cliente relacionado |
+| level | string | info, warning, error |
+| message | string | Descrição do evento |
+
+### 7.2 Planilha do Cliente
+
+**Aba: BANCOS** (Onde o dinheiro ESTÁ)
+| Campo | Tipo | Descrição |
+|-------|------|-----------|
+| ID | number | Identificador único |
+| Nome | string | Nome do banco (Nubank, Inter, etc.) |
+| Tipo | string | Corrente, Poupança, Digital, Investimento |
+| Saldo | number | Saldo inicial ou atual |
+| Icone | string | Emoji ou código do ícone |
+| Agencia | string | Número da agência (opcional) |
+| Conta_Numero | string | Número da conta (opcional) |
+
+**Aba: CONTAS** (Projetos/Centros de Custo)
+| Campo | Tipo | Descrição |
+|-------|------|-----------|
+| ID | number | Identificador único |
+| Nome | string | Nome do projeto (MOTO, CASA, EMPRESA X) |
+| Tipo | string | Tipo de conta/projeto |
+| Icone | string | Emoji ou código do ícone |
+| Orcamento_Mensal | number | Orçamento mensal (opcional) |
+
+**Aba: TRANSACOES**
+| Campo | Tipo | Descrição |
+|-------|------|-----------|
+| Data | date | Data da transação |
+| Tipo | string | Entrada ou Saída |
+| Categoria | string | Nome da conta/projeto relacionado |
+| Subcategoria | string | Detalhamento (ex: FINANCIAMENTO, LUZ) |
+| Valor | number | Valor absoluto |
+| Conta | number | ID da conta/projeto (FK) |
+| Banco | number | ID do banco (FK) |
+| Status | string | Pendente, Pago, Recebido, Atrasado |
+| Descrição | string | Descrição detalhada |
+| Centro_Custo | string | Agrupamento adicional |
+
+**Aba: CATEGORIAS** (Mapeamento DRE)
+| Campo | Tipo | Descrição |
+|-------|------|-----------|
+| Categoria | string | Nome da categoria |
+| Grupo_DRE | string | Grupo no DRE (Receita Bruta, Custos Variáveis, etc.) |
+
+**Aba: METAS**
+| Campo | Tipo | Descrição |
+|-------|------|-----------|
+| Categoria | string | Categoria relacionada |
+| Meta | number | Valor da meta |
+| Tipo | string | Gasto ou Receita |
+
+**Aba: REGRAS_CATEGORIZACAO** (Aprendizado)
+| Campo | Tipo | Descrição |
+|-------|------|-----------|
+| padrao | string | Texto a buscar na descrição |
+| categoria | string | Categoria a aplicar |
+| subcategoria | string | Subcategoria a aplicar |
+| tipo | string | Entrada ou Saída |
+
+---
+
+## 8. INTEGRAÇÕES
+
+### 8.1 OpenAI (Chat IA)
+
+**Configuração:**
+- Chave API na aba CONFIG (cliente) ou CONFIG_GLOBAL (admin)
+- Modelo: GPT-3.5-turbo ou GPT-4
+
+**Uso:**
+```javascript
+// AIService.js
+function callOpenAI(prompt, apiKey) {
+  var options = {
+    method: 'POST',
+    headers: { 'Authorization': 'Bearer ' + apiKey },
+    payload: JSON.stringify({
+      model: 'gpt-3.5-turbo',
+      messages: [{ role: 'user', content: prompt }]
+    })
   };
+  var response = UrlFetchApp.fetch('https://api.openai.com/v1/chat/completions', options);
+  return JSON.parse(response.getContentText());
 }
-
-function criarAbaConfig(ss) {
-  var sheet = ss.getSheetByName('CONFIG');
-  if (!sheet) {
-    sheet = ss.insertSheet('CONFIG');
-  }
-  sheet.clear();
-  
-  var dados = [
-    ['Plano', 'professional'],
-    ['Nome', 'Nome da Empresa'],
-    ['CNPJ', ''],
-    ['AI_API_KEY', '']
-  ];
-  
-  sheet.getRange(1, 1, dados.length, 2).setValues(dados);
-  sheet.getRange('A:A').setFontWeight('bold');
-  sheet.setColumnWidth(1, 150);
-  sheet.setColumnWidth(2, 300);
-  
-  Logger.log('  ✓ CONFIG criada');
-}
-
-function criarAbaBancos(ss) {
-  var sheet = ss.getSheetByName('BANCOS');
-  if (!sheet) {
-    sheet = ss.insertSheet('BANCOS');
-  }
-  sheet.clear();
-  
-  // Cabeçalho
-  var headers = ['ID', 'Nome', 'Tipo', 'Saldo', 'Icone', 'Agencia', 'Conta_Numero'];
-  sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
-  sheet.getRange(1, 1, 1, headers.length)
-    .setBackground('#059669')
-    .setFontColor('#ffffff')
-    .setFontWeight('bold');
-  
-  // Dados de exemplo
-  var exemplos = [
-    [1, 'Nubank', 'Digital', 10000, '💜', '', ''],
-    [2, 'Inter', 'Digital', 5000, '🧡', '', ''],
-    [3, 'Banco Principal', 'Corrente', 25000, '🏦', '', '']
-  ];
-  sheet.getRange(2, 1, exemplos.length, headers.length).setValues(exemplos);
-  
-  // Formatação
-  sheet.setFrozenRows(1);
-  sheet.getRange('D:D').setNumberFormat('R$ #,##0.00');
-  sheet.setColumnWidths(1, 7, [50, 150, 100, 120, 60, 80, 120]);
-  
-  Logger.log('  ✓ BANCOS criada');
-}
-
-function criarAbaContas(ss) {
-  var sheet = ss.getSheetByName('CONTAS');
-  if (!sheet) {
-    sheet = ss.insertSheet('CONTAS');
-  }
-  sheet.clear();
-  
-  var headers = ['ID', 'Nome', 'Tipo', 'Icone', 'Orcamento_Mensal'];
-  sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
-  sheet.getRange(1, 1, 1, headers.length)
-    .setBackground('#7c3aed')
-    .setFontColor('#ffffff')
-    .setFontWeight('bold');
-  
-  var exemplos = [
-    [1, 'MOTO', 'Veículo', '🏍️', 1500],
-    [2, 'CASA', 'Moradia', '🏠', 3000],
-    [3, 'EMPRESA CLIENTE', 'Cliente', '🏢', 0]
-  ];
-  sheet.getRange(2, 1, exemplos.length, headers.length).setValues(exemplos);
-  
-  sheet.setFrozenRows(1);
-  sheet.getRange('E:E').setNumberFormat('R$ #,##0.00');
-  sheet.setColumnWidths(1, 5, [50, 200, 100, 60, 150]);
-  
-  Logger.log('  ✓ CONTAS criada');
-}
-
-function criarAbaTransacoes(ss) {
-  var sheet = ss.getSheetByName('TRANSACOES');
-  if (!sheet) {
-    sheet = ss.insertSheet('TRANSACOES');
-  }
-  sheet.clear();
-  
-  var headers = ['Data', 'Tipo', 'Categoria', 'Subcategoria', 'Valor', 'Conta', 'Banco', 'Status', 'Descrição', 'Centro_Custo'];
-  sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
-  sheet.getRange(1, 1, 1, headers.length)
-    .setBackground('#2563eb')
-    .setFontColor('#ffffff')
-    .setFontWeight('bold');
-  
-  // Exemplos
-  var hoje = new Date();
-  var dataStr = Utilities.formatDate(hoje, 'GMT-3', 'yyyy-MM-dd');
-  
-  var exemplos = [
-    [dataStr, 'Saída', 'MOTO', 'FINANCIAMENTO', 800, 1, 1, 'Pago', 'Parcela financiamento', 'Pessoal'],
-    [dataStr, 'Saída', 'CASA', 'LUZ', 250, 2, 2, 'Pendente', 'Conta de luz janeiro', 'Pessoal'],
-    [dataStr, 'Entrada', 'EMPRESA CLIENTE', 'SERVIÇOS', 5000, 3, 1, 'Recebido', 'Projeto entregue', 'Comercial']
-  ];
-  sheet.getRange(2, 1, exemplos.length, headers.length).setValues(exemplos);
-  
-  sheet.setFrozenRows(1);
-  sheet.getRange('A:A').setNumberFormat('yyyy-mm-dd');
-  sheet.getRange('E:E').setNumberFormat('R$ #,##0.00');
-  sheet.setColumnWidths(1, 10, [100, 80, 150, 150, 100, 60, 60, 80, 250, 100]);
-  
-  // Validação de dados para Tipo
-  var tipoRule = SpreadsheetApp.newDataValidation()
-    .requireValueInList(['Entrada', 'Saída'], true)
-    .build();
-  sheet.getRange('B2:B1000').setDataValidation(tipoRule);
-  
-  // Validação para Status
-  var statusRule = SpreadsheetApp.newDataValidation()
-    .requireValueInList(['Pendente', 'Pago', 'Recebido', 'Atrasado', 'Agendado', 'Concluído'], true)
-    .build();
-  sheet.getRange('H2:H1000').setDataValidation(statusRule);
-  
-  Logger.log('  ✓ TRANSACOES criada');
-}
-
-function criarAbaCategorias(ss) {
-  var sheet = ss.getSheetByName('CATEGORIAS');
-  if (!sheet) {
-    sheet = ss.insertSheet('CATEGORIAS');
-  }
-  sheet.clear();
-  
-  var headers = ['Categoria', 'Grupo_DRE'];
-  sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
-  sheet.getRange(1, 1, 1, headers.length)
-    .setBackground('#dc2626')
-    .setFontColor('#ffffff')
-    .setFontWeight('bold');
-  
-  var exemplos = [
-    ['MOTO', 'Despesas Pessoais'],
-    ['CASA', 'Despesas Fixas'],
-    ['EMPRESA CLIENTE', 'Receita de Serviços']
-  ];
-  sheet.getRange(2, 1, exemplos.length, headers.length).setValues(exemplos);
-  
-  sheet.setFrozenRows(1);
-  sheet.setColumnWidths(1, 2, [200, 200]);
-  
-  Logger.log('  ✓ CATEGORIAS criada');
-}
-
-function criarAbaMetas(ss) {
-  var sheet = ss.getSheetByName('METAS');
-  if (!sheet) {
-    sheet = ss.insertSheet('METAS');
-  }
-  sheet.clear();
-  
-  var headers = ['Categoria', 'Meta', 'Tipo'];
-  sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
-  sheet.getRange(1, 1, 1, headers.length)
-    .setBackground('#f59e0b')
-    .setFontColor('#ffffff')
-    .setFontWeight('bold');
-  
-  var exemplos = [
-    ['MOTO', 1500, 'Gasto'],
-    ['CASA', 3000, 'Gasto'],
-    ['EMPRESA CLIENTE', 10000, 'Receita']
-  ];
-  sheet.getRange(2, 1, exemplos.length, headers.length).setValues(exemplos);
-  
-  sheet.setFrozenRows(1);
-  sheet.getRange('B:B').setNumberFormat('R$ #,##0.00');
-  
-  var tipoRule = SpreadsheetApp.newDataValidation()
-    .requireValueInList(['Gasto', 'Receita'], true)
-    .build();
-  sheet.getRange('C2:C1000').setDataValidation(tipoRule);
-  
-  sheet.setColumnWidths(1, 3, [200, 150, 100]);
-  
-  Logger.log('  ✓ METAS criada');
-}
-
-function criarAbaRegras(ss) {
-  var sheet = ss.getSheetByName('REGRAS_CATEGORIZACAO');
-  if (!sheet) {
-    sheet = ss.insertSheet('REGRAS_CATEGORIZACAO');
-  }
-  sheet.clear();
-  
-  var headers = ['padrao', 'categoria', 'subcategoria', 'tipo'];
-  sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
-  sheet.getRange(1, 1, 1, headers.length)
-    .setBackground('#ec4899')
-    .setFontColor('#ffffff')
-    .setFontWeight('bold');
-  
-  var exemplos = [
-    ['pix recebido', 'EMPRESA CLIENTE', 'SERVIÇOS', 'Entrada'],
-    ['financiamento', 'MOTO', 'FINANCIAMENTO', 'Saída'],
-    ['energia', 'CASA', 'LUZ', 'Saída'],
-    ['aluguel', 'CASA', 'ALUGUEL', 'Saída'],
-    ['seguro', 'MOTO', 'SEGURO', 'Saída']
-  ];
-  sheet.getRange(2, 1, exemplos.length, headers.length).setValues(exemplos);
-  
-  sheet.setFrozenRows(1);
-  
-  var tipoRule = SpreadsheetApp.newDataValidation()
-    .requireValueInList(['Entrada', 'Saída', 'auto'], true)
-    .build();
-  sheet.getRange('D2:D1000').setDataValidation(tipoRule);
-  
-  sheet.setColumnWidths(1, 4, [200, 150, 150, 80]);
-  
-  Logger.log('  ✓ REGRAS_CATEGORIZACAO criada');
-}
-
-// Função auxiliar para configurar larguras de colunas
-SpreadsheetApp.Spreadsheet.prototype.setColumnWidths = function(startCol, numCols, widths) {
-  // Esta função é chamada no sheet, não no spreadsheet
-};
-
-Sheet.prototype.setColumnWidths = function(startCol, numCols, widths) {
-  for (var i = 0; i < widths.length; i++) {
-    this.setColumnWidth(startCol + i, widths[i]);
-  }
-};
 ```
 
----
+### 8.2 Chart.js (Gráficos)
 
-## 4. Documentação dos Arquivos .gs (Backend)
-
-### 4.1 Main.gs
-**Função:** Ponto de entrada da aplicação (doGet) e processamento de IA.
-
-```
-Main.gs
-├── doGet(e)                    → Entrypoint do Web App
-│   ├── Serve service-worker.html
-│   ├── Serve manifest.json
-│   ├── Processa ?client=xxx (multi-cliente)
-│   └── Retorna index.html
-│
-├── include(filename)           → Inclui arquivos HTML
-│
-├── checkAIUsageLimit()         → Verifica limite de consultas IA
-│
-├── askAIFinancialQuestion()    → Processa perguntas do chatbot
-│   ├── Valida API key
-│   ├── Filtra transações por período
-│   ├── Monta contexto financeiro
-│   └── Chama callOpenAI()
-│
-├── callOpenAI()                → Chamada à API da OpenAI
-│
-├── calculatePreviousPeriod()   → Calcula período anterior
-│
-└── Funções de teste
-```
-
-**Manutenção:**
-- Se mudar modelo da OpenAI: alterar em `callOpenAI()`
-- Se adicionar novos parâmetros de URL: modificar `doGet()`
-- Logs de debug: usar `Logger.log()`
-
----
-
-### 4.2 DataService.gs
-**Função:** Leitura e processamento de dados das planilhas.
-
-```
-DataService.gs
-├── PLANS                       → Definição dos planos (basic, professional, enterprise)
-├── PLAN_FEATURES               → Features por plano
-│
-├── getClientPlan(ss)           → Lê plano do cliente da CONFIG
-├── getPlanInfo(planKey)        → Retorna info do plano
-│
-├── fetchAllData()              → Função principal - busca todos os dados
-│   ├── readConfig()
-│   ├── readAccounts()
-│   ├── readBanks()             → NOVO
-│   ├── readDreMapping()
-│   ├── readTransactions()
-│   └── readGoals()
-│
-├── readConfig(ss)              → Lê aba CONFIG
-├── readAccounts(ss)            → Lê aba CONTAS
-├── readBanks(ss)               → Lê aba BANCOS (NOVO)
-├── readTransactions(ss,...)    → Lê aba TRANSACOES
-├── readGoals(ss)               → Lê aba METAS
-├── readDreMapping(ss)          → Lê aba CATEGORIAS
-│
-└── validateData()              → Valida dados carregados
-```
-
-**Manutenção:**
-- Adicionar nova aba: criar função `readNovaAba()` e chamar em `fetchAllData()`
-- Adicionar coluna em aba: ajustar range e mapeamento na função correspondente
-- Mudar preços dos planos: editar `PLAN_FEATURES`
-
----
-
-### 4.3 AdminService.gs
-**Função:** Gestão multi-cliente centralizada.
-
-```
-AdminService.gs
-├── ADMIN_SPREADSHEET_ID        → ID da planilha admin (de PropertiesService)
-│
-├── init()                      → Inicializa serviço
-├── isMultiClientMode()         → Verifica se está em modo multi-cliente
-│
-├── getClientById(clientId)     → Busca cliente pelo ID
-├── getAllClients()             → Lista todos os clientes
-│
-├── updateLastAccess()          → Atualiza último acesso
-├── incrementAIUsage()          → Incrementa uso de IA
-├── resetMonthlyAICounters()    → Reseta contadores mensais
-│
-├── log()                       → Registra evento no LOG_SISTEMA
-├── getGlobalConfig()           → Lê config global
-├── createClient()              → Cria novo cliente
-│
-├── setupAdminSpreadsheet()     → Configura ID da planilha admin
-├── setupExistingAdminSpreadsheet() → Configura planilha existente
-└── createAdminStructure()      → Cria estrutura completa
-```
-
-**Manutenção:**
-- Trigger mensal: configurar `monthlyReset()` no Apps Script
-- Adicionar campo em CLIENTES: editar `createClient()` e `getClientById()`
-
----
-
-### 4.4 AlertService.gs
-**Função:** Geração de alertas automáticos.
-
-```
-AlertService.gs
-├── ALERT_TYPES                 → Tipos de alerta
-├── PRIORITY                    → Níveis de prioridade
-│
-├── analyzeAndGenerateAlerts()  → Função principal
-│   ├── checkCashFlowProjection()    → Fluxo de caixa crítico
-│   ├── checkOverdueReceivables()    → Inadimplência
-│   ├── checkAbnormalExpenses()      → Despesas anormais
-│   ├── checkGoalsProgress()         → Metas estouradas
-│   ├── checkDueToday()              → Vencimentos do dia
-│   └── checkLowBalance()            → Saldo baixo
-│
-└── formatAlertsForDisplay()    → Formata para frontend
-```
-
-**Manutenção:**
-- Adicionar novo tipo de alerta: criar função `checkNovoAlerta()` e adicionar em `analyzeAndGenerateAlerts()`
-- Ajustar limites: modificar valores nas funções de verificação
-
----
-
-### 4.5 CategorizationService.gs
-**Função:** Categorização automática de transações.
-
-```
-CategorizationService.gs
-├── DEFAULT_CATEGORIES          → Categorias padrão
-│
-├── getCategorizationRules()    → Lê regras da planilha
-├── categorizeByRules()         → Categoriza por regras
-├── categorizeWithAI()          → Categoriza usando IA
-├── categorizeBatch()           → Processa lote
-│
-├── getExistingCategories()     → Lista categorias existentes
-├── addCategorizationRule()     → Adiciona nova regra
-└── learnFromCorrection()       → Aprende com correções
-```
-
----
-
-### 4.6 ImportService.gs
-**Função:** Importação de extratos OFX/CSV.
-
-```
-ImportService.gs
-├── parseOFX()                  → Parser de arquivos OFX
-├── parseCSV()                  → Parser de arquivos CSV
-│
-├── extractTag()                → Extrai tag OFX
-├── parseOFXDate()              → Converte data OFX
-├── parseCSVDate()              → Converte data CSV
-├── parseCSVValue()             → Converte valor CSV
-│
-├── findDuplicates()            → Detecta duplicatas
-├── saveImportedTransactions()  → Salva transações
-├── createReconciliationSheet() → Cria aba de revisão
-└── processApprovedTransactions() → Processa aprovações
-```
-
----
-
-### 4.7 Config.gs
-**Função:** Configurações centrais.
-
-```
-Config.gs
-├── ADMIN_MASTER_ID             → ID da planilha admin
-├── getSpreadsheetId()          → Retorna ID da planilha atual
-└── initAdminService()          → Inicializa admin
-```
-
----
-
-## 5. Documentação dos Arquivos .html (Frontend)
-
-### 5.1 index.html
-**Função:** Página principal que carrega todos os módulos.
-
+**CDN:**
 ```html
-Estrutura:
-├── <head>
-│   ├── Meta tags (viewport, theme-color)
-│   ├── Tailwind CSS (CDN)
-│   ├── Chart.js (CDN)
-│   ├── Lucide Icons (CDN)
-│   └── styles.html (CSS customizado)
-│
-└── <body>
-    ├── <div id="app">           → Container principal
-    └── Scripts (ordem importa!):
-        ├── JS_Core.html         → Variáveis globais
-        ├── JS_Logic.html        → Lógica de negócio
-        ├── JS_EnhancedInsights  → Insights aprimorados
-        ├── JS_Components.html   → Componentes reutilizáveis
-        ├── JS_FeatureFlags.html → Controle de features por plano
-        ├── JS_ChatAI.html       → Chatbot de IA
-        ├── JS_Alerts.html       → Sistema de alertas
-        ├── JS_Import.html       → Importação de extratos
-        ├── JS_Bancos.html       → Visão por bancos
-        ├── JS_Contas.html       → Visão por contas/projetos
-        ├── JS_Events.html       → Eventos e interações
-        ├── JS_Render.html       → Renderização principal
-        ├── JS_Charts.html       → Gráficos
-        ├── JS_Keyboard.html     → Atalhos de teclado
-        ├── JS_Onboarding.html   → Tutorial inicial
-        └── JS_Init.html         → Inicialização
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+```
+
+**Tipos de gráficos usados:**
+- Bar (comparativo de períodos)
+- Doughnut (gastos por categoria)
+- Line (evolução mensal, projeções)
+
+### 8.3 Tailwind CSS (Estilos)
+
+**CDN:**
+```html
+<script src="https://cdn.tailwindcss.com"></script>
+```
+
+**Nota:** Em produção, recomenda-se compilar o CSS.
+
+### 8.4 Lucide Icons
+
+**CDN:**
+```html
+<script src="https://unpkg.com/lucide@latest"></script>
 ```
 
 ---
 
-### 5.2 JS_Core.html
-**Função:** Variáveis globais e funções utilitárias.
+## 9. GUIA DE MANUTENÇÃO
 
-```javascript
-Variáveis:
-├── GLOBAL_DATA          → Dados carregados do backend
-├── CURRENT_VIEW         → Visão atual (overview, detail)
-├── CURRENT_TAB          → Aba atual (dashboard, banks, projects, dre)
-├── SELECTED_BANK        → Banco selecionado para filtro
-├── SELECTED_PROJECT     → Projeto selecionado para filtro
-├── START_DATE, END_DATE → Período de filtro
-├── FILTER_MODE          → Modo de filtro (this_month, last_month, etc)
-├── IS_PRIVACY_MODE      → Modo privacidade ativo
-├── IS_DRE_MODE          → Modo DRE ativo
-└── ADVANCED_FILTERS     → Filtros avançados
+### 9.1 Adicionar Novo Cliente
 
-Funções:
-├── switchTab(tab)       → Troca de aba
-├── formatCurrency()     → Formata valor em R$
-├── formatDateBR()       → Formata data DD/MM/YYYY
-├── parseDate()          → Parse de data
-└── showToast()          → Exibe notificação
-```
+1. **Criar planilha de dados:**
+   ```javascript
+   // Execute na planilha do cliente
+   criarEstruturaCliente()
+   ```
 
----
+2. **Registrar na ADMIN_MASTER:**
+   - Abrir ADMIN_MASTER
+   - Ir na aba CLIENTES
+   - Adicionar linha: `client_id | nome | spreadsheet_id | plano | ativo`
 
-### 5.3 JS_Render.html
-**Função:** Renderização principal do dashboard.
+3. **Enviar link ao cliente:**
+   ```
+   https://script.google.com/.../exec?client=CLIENT_ID
+   ```
 
-```javascript
-Funções principais:
-├── renderApp()              → Decide qual view renderizar
-├── renderOverview()         → Renderiza visão geral
-├── renderBanksView()        → Renderiza visão de bancos
-├── renderProjectsView()     → Renderiza visão de projetos
-│
-├── renderHeader()           → Cabeçalho com logo e ações
-├── renderTabNavigation()    → Abas de navegação
-├── renderFilterBar()        → Filtros de período
-├── renderKPICards()         → Cards de KPIs
-├── renderCharts()           → Área de gráficos
-├── renderTransactionsTable() → Tabela de transações
-└── renderPagination()       → Paginação
-```
+### 9.2 Atualizar Código
+
+1. Editar arquivos na planilha do projeto
+2. Publicar nova versão do Web App:
+   - Implantações → Gerenciar implantações
+   - Editar → Nova versão
+3. Todos os clientes receberão a atualização automaticamente
+
+### 9.3 Monitorar Sistema
+
+**Logs:**
+- Verificar aba LOG_SISTEMA na ADMIN_MASTER
+- Filtrar por `level = 'error'` para problemas
+
+**Métricas:**
+- Verificar `ultimo_acesso` de cada cliente
+- Monitorar uso de queries IA por cliente
+
+### 9.4 Backup
+
+- As planilhas do Google Sheets têm versionamento automático
+- Recomenda-se exportar periodicamente para backup externo
 
 ---
 
-### 5.4 JS_Bancos.html
-**Função:** Componente de visão por bancos.
+## 📝 CHANGELOG
 
-```javascript
-Variáveis:
-├── SELECTED_BANK        → Banco selecionado
-└── BANKS_VIEW_MODE      → Modo de visualização (cards/list)
-
-Funções:
-├── renderBanksSection()     → Renderiza seção principal
-├── renderBanksCards()       → Renderiza cards de bancos
-├── renderBanksList()        → Renderiza lista de bancos
-├── openBankDetail()         → Abre modal de detalhe
-├── closeBankDetail()        → Fecha modal
-├── switchBankTab()          → Troca aba no modal
-├── setBanksViewMode()       → Altera modo de visualização
-└── filterByBank()           → Filtra dashboard por banco
-```
+| Versão | Data | Alterações |
+|--------|------|------------|
+| 3.3.0 | Dez/2025 | Arquitetura multi-tenant, sistema de planos |
+| 3.2.0 | Dez/2025 | Hierarquia BANCOS → CONTAS → TRANSAÇÕES |
+| 3.1.0 | Dez/2025 | Importação OFX/CSV com IA |
+| 3.0.0 | Dez/2025 | Refatoração completa B2B |
 
 ---
 
-### 5.5 JS_Contas.html
-**Função:** Componente de visão por contas/projetos.
-
-```javascript
-Variáveis:
-├── SELECTED_PROJECT     → Projeto selecionado
-└── PROJECTS_VIEW_MODE   → Modo de visualização
-
-Funções:
-├── renderProjectsSection()  → Renderiza seção principal
-├── renderProjectsCards()    → Renderiza cards de projetos
-├── renderProjectsList()     → Renderiza lista
-├── openProjectDetail()      → Abre modal de detalhe
-├── closeProjectDetail()     → Fecha modal
-├── switchProjectTab()       → Troca aba no modal
-└── setProjectsViewMode()    → Altera modo
-```
-
----
-
-### 5.6 JS_ChatAI.html
-**Função:** Interface do chatbot de IA.
-
-```javascript
-Funções:
-├── initChat()               → Inicializa chat
-├── renderChatButton()       → Botão flutuante
-├── openChat()               → Abre janela do chat
-├── closeChat()              → Fecha chat
-├── sendMessage()            → Envia mensagem
-├── addMessage()             → Adiciona mensagem ao histórico
-├── askQuickQuestion()       → Pergunta rápida pré-definida
-└── getContextForAI()        → Monta contexto para IA
-```
-
----
-
-### 5.7 JS_Alerts.html
-**Função:** Sistema de alertas automáticos.
-
-```javascript
-Variáveis:
-├── ALERTS_DATA          → Alertas carregados
-└── ALERTS_DISMISSED     → Alertas dispensados
-
-Funções:
-├── loadAlerts()             → Carrega alertas do backend
-├── generateLocalAlerts()    → Gera alertas localmente (fallback)
-├── renderAlertsPanel()      → Renderiza painel de alertas
-├── renderAlertCard()        → Renderiza card individual
-├── dismissAlert()           → Dispensa alerta
-├── dismissAllAlerts()       → Dispensa todos
-├── showAllAlerts()          → Modal com todos alertas
-└── initAlerts()             → Inicialização
-```
-
----
-
-### 5.8 JS_Import.html
-**Função:** Importação de extratos OFX/CSV.
-
-```javascript
-Variáveis:
-└── IMPORT_STATE         → Estado da importação
-
-Funções:
-├── openImportModal()        → Abre modal de importação
-├── closeImportModal()       → Fecha modal
-├── handleFileDrop()         → Processa drag & drop
-├── handleFileSelect()       → Processa seleção de arquivo
-├── processSelectedFile()    → Processa arquivo
-├── previewImportFile()      → Preview do arquivo
-├── processImport()          → Executa importação
-├── handleImportResult()     → Processa resultado
-└── showReconciliationLink() → Mostra link para revisão
-```
-
----
-
-### 5.9 JS_FeatureFlags.html
-**Função:** Controle de features por plano.
-
-```javascript
-Funções:
-├── hasFeature(feature)      → Verifica se feature está disponível
-├── requireFeature(feature)  → Exige feature (mostra upgrade se não tiver)
-└── getAvailableFeatures()   → Lista features disponíveis
-
-Features controladas:
-├── dashboard, filters, charts, goals    → Todos os planos
-├── export_csv, export_pdf               → Todos os planos
-├── dre                                  → Professional+
-├── ai_insights                          → Professional+
-├── alerts                               → Enterprise
-├── predictive_analytics                 → Enterprise
-└── whatsapp_reports                     → Enterprise
-```
-
----
-
-### 5.10 Outros Arquivos
-
-| Arquivo | Função |
-|---------|--------|
-| JS_Events.html | Handlers de eventos (cliques, filtros, etc) |
-| JS_Charts.html | Renderização de gráficos (Chart.js) |
-| JS_Logic.html | Cálculos e lógica de negócio |
-| JS_Components.html | Componentes reutilizáveis (cards, modais) |
-| JS_EnhancedInsights.html | Insights financeiros avançados |
-| JS_Keyboard.html | Atalhos de teclado |
-| JS_Onboarding.html | Tutorial de primeiro acesso |
-| JS_Init.html | Inicialização da aplicação |
-| styles.html | CSS customizado |
-| service-worker.html | PWA Service Worker |
-
----
-
-## 6. Sistema Multi-Cliente (ADMIN)
-
-### 6.1 Fluxo de Acesso
-
-```
-1. Cliente acessa: https://script.google.com/.../exec?client=empresa_abc
-                                                     ↓
-2. doGet() lê parâmetro "client"
-                                                     ↓
-3. AdminService.getClientById("empresa_abc")
-                                                     ↓
-4. Busca na ADMIN_MASTER → spreadsheet_id
-                                                     ↓
-5. Salva em PropertiesService.getUserProperties()
-                                                     ↓
-6. DataService.fetchAllData() usa esse spreadsheet_id
-                                                     ↓
-7. Renderiza dashboard com dados do cliente
-```
-
-### 6.2 Estrutura ADMIN_MASTER
-
-```
-ADMIN_DASHBOARD_MASTER (Planilha)
-│
-├── CLIENTES
-│   │ client_id │ nome │ spreadsheet_id │ plano │ status │
-│   │ emp_001   │ XPTO │ 1abc123...     │ prof  │ ativo  │
-│
-├── CONFIG_GLOBAL
-│   │ chave           │ valor    │
-│   │ openai_api_key  │ sk-xxx   │
-│   │ limite_ia_basic │ 0        │
-│
-├── LOG_SISTEMA
-│   │ timestamp │ client_id │ acao  │ detalhes │
-│
-└── ALERTAS_PENDENTES
-    │ timestamp │ client_id │ tipo │ mensagem │
-```
-
-### 6.3 Papel de Cada Componente
-
-| Componente | Papel |
-|------------|-------|
-| **Projeto Apps Script** | Contém TODO o código. É único para todos os clientes. |
-| **ADMIN_MASTER** | Controle central. Lista clientes, configura limites, registra logs. |
-| **Planilha do Cliente** | Apenas DADOS. Não tem código. É onde o cliente/equipe preenche. |
-
----
-
-## 7. Análise de Escalabilidade
-
-### 7.1 Pontos Fortes ✅
-
-| Aspecto | Análise |
-|---------|---------|
-| **Atualização de código** | Um deploy atualiza todos os clientes |
-| **Custo de IA** | ~R$ 0,003/consulta - insignificante |
-| **Cache** | CacheService reduz leituras de planilha |
-| **Separação de dados** | Cada cliente em planilha separada |
-| **Controle de acesso** | client_id + status na ADMIN |
-
-### 7.2 Pontos de Atenção ⚠️
-
-| Aspecto | Risco | Mitigação |
-|---------|-------|-----------|
-| **Limite de execução GAS** | 6min/execução | Otimizar leituras, usar cache |
-| **Quota de API** | 20.000 req/dia (free) | Monitorar, considerar Workspace |
-| **Planilhas grandes** | >50k linhas lento | Arquivar dados antigos |
-| **Concorrência** | Múltiplos acessos | Cache + locks se necessário |
-
-### 7.3 Campos e Relacionamentos
-
-```
-Validação de Consistência:
-
-TRANSACOES.Conta ─────────► CONTAS.ID         ✅ Validado
-TRANSACOES.Banco ─────────► BANCOS.ID         ✅ Validado
-TRANSACOES.Categoria ─────► CONTAS.Nome       ✅ Validado (ou CATEGORIAS)
-METAS.Categoria ──────────► CONTAS.Nome       ✅ Validado
-CATEGORIAS.Categoria ─────► CONTAS.Nome       ✅ Validado
-```
-
-### 7.4 Recomendações para Escala
-
-1. **Até 50 clientes:** Estrutura atual funciona bem
-2. **50-200 clientes:** Implementar arquivamento automático
-3. **200+ clientes:** Considerar migração para Cloud SQL + App Engine
-
----
-
-## 8. Guia de Manutenção
-
-### 8.1 Tarefas Comuns
-
-| Tarefa | Arquivo | Local |
-|--------|---------|-------|
-| Mudar preço dos planos | DataService.gs | PLAN_FEATURES |
-| Adicionar nova feature | DataService.gs + JS_FeatureFlags.html | PLAN_FEATURES + hasFeature() |
-| Novo tipo de alerta | AlertService.gs | analyzeAndGenerateAlerts() |
-| Mudar modelo OpenAI | Main.gs | callOpenAI() |
-| Adicionar nova aba | DataService.gs | criar readNovaAba() |
-| Novo campo em transação | DataService.gs + JS_Render.html | readTransactions() + tabela |
-
-### 8.2 Deploy de Atualizações
-
-```
-1. Editar código no Apps Script
-2. Salvar (Ctrl+S)
-3. Testar: "Executar" → função de teste
-4. Deploy:
-   - "Implantar" → "Gerenciar implantações"
-   - Editar implantação existente
-   - Nova versão → Implantar
-5. Testar URL em aba anônima
-```
-
-### 8.3 Troubleshooting
-
-| Problema | Causa Provável | Solução |
-|----------|---------------|---------|
-| Erro 404 | Deploy não publicado | Verificar implantação |
-| Dados não carregam | spreadsheet_id errado | Verificar ADMIN_MASTER |
-| IA não responde | API key inválida | Verificar CONFIG_GLOBAL |
-| Cliente não encontrado | client_id errado | Verificar parâmetro URL |
-| Lento | Muitos dados | Implementar paginação/cache |
-
-### 8.4 Logs e Debug
-
-```javascript
-// No backend (Apps Script)
-Logger.log('Mensagem de debug');
-
-// Ver logs:
-// Apps Script → "Execuções" → Selecionar execução → Ver logs
-
-// No frontend (Console do navegador)
-console.log('Debug:', variavel);
-```
-
----
-
-## Checklist de Implantação
-
-- [ ] Criar projeto Apps Script
-- [ ] Copiar todos os arquivos .gs e .html
-- [ ] Criar planilha ADMIN_MASTER
-- [ ] Executar `createAdminStructure()` na ADMIN
-- [ ] Configurar API Key na CONFIG_GLOBAL
-- [ ] Criar planilha do primeiro cliente
-- [ ] Executar `criarEstruturaCompleta()` na planilha do cliente
-- [ ] Cadastrar cliente na ADMIN_MASTER (aba CLIENTES)
-- [ ] Fazer deploy do Web App
-- [ ] Testar URL: `...exec?client=CLIENT_ID`
-- [ ] Configurar trigger mensal para `monthlyReset()`
-
----
-
-*Documentação criada em Dezembro 2025*
-*Versão do Sistema: 3.3.0*
+*Documentação gerada em Dezembro 2025*
+*Dashboard Financeiro Multi-Tenant B2B v3.3.0*
