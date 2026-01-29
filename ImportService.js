@@ -336,7 +336,7 @@ var ImportService = {
 // Funções expostas para o frontend
 
 // Importa arquivo OFX
-function importOFXFile(fileContent, accountId) {
+function importOFXFile(fileContent, bankId) {
   var ss = SpreadsheetApp.openById(getSpreadsheetId());
   
   // Parse OFX
@@ -346,16 +346,16 @@ function importOFXFile(fileContent, accountId) {
   }
   
   // Busca transações existentes para detectar duplicatas
-  var existingTxs = DataService.readTransactions(ss, DataService.readAccounts(ss), {});
+  var existingTxs = DataService.readTransactions(ss, DataService.readAccounts(ss), DataService.readBanks(ss), {});
   var dupCheck = ImportService.findDuplicates(parseResult.transactions, existingTxs);
   
-  // Categoriza
+  // Categoriza usando IA (sugere Conta/Projeto baseado na descrição)
   var apiKey = getAPIKey(ss);
   var categorized = CategorizationService.categorizeBatch(dupCheck.unique, ss, apiKey);
   
-  // Cria aba de conciliação
+  // Cria aba de conciliação para revisão
   var importId = new Date().getTime();
-  var reconciliation = ImportService.createReconciliationSheet(ss, categorized.results, importId);
+  var reconciliation = ImportService.createReconciliationSheet(ss, categorized.results, importId, bankId);
   
   return {
     success: true,
@@ -370,7 +370,7 @@ function importOFXFile(fileContent, accountId) {
 }
 
 // Importa CSV
-function importCSVFile(fileContent, config, accountId) {
+function importCSVFile(fileContent, config, bankId) {
   var ss = SpreadsheetApp.openById(getSpreadsheetId());
   
   var parseResult = ImportService.parseCSV(fileContent, config);
@@ -378,14 +378,14 @@ function importCSVFile(fileContent, config, accountId) {
     return parseResult;
   }
   
-  var existingTxs = DataService.readTransactions(ss, DataService.readAccounts(ss), {});
+  var existingTxs = DataService.readTransactions(ss, DataService.readAccounts(ss), DataService.readBanks(ss), {});
   var dupCheck = ImportService.findDuplicates(parseResult.transactions, existingTxs);
   
   var apiKey = getAPIKey(ss);
   var categorized = CategorizationService.categorizeBatch(dupCheck.unique, ss, apiKey);
   
   var importId = new Date().getTime();
-  var reconciliation = ImportService.createReconciliationSheet(ss, categorized.results, importId);
+  var reconciliation = ImportService.createReconciliationSheet(ss, categorized.results, importId, bankId);
   
   return {
     success: true,
@@ -399,9 +399,9 @@ function importCSVFile(fileContent, config, accountId) {
 }
 
 // Aprova transações da conciliação
-function approveImportedTransactions(importSheetName, accountId) {
+function approveImportedTransactions(importSheetName, bankId) {
   var ss = SpreadsheetApp.openById(getSpreadsheetId());
-  return ImportService.processApprovedTransactions(ss, importSheetName, accountId);
+  return ImportService.processApprovedTransactions(ss, importSheetName, bankId);
 }
 
 // Lista abas de importação pendentes
