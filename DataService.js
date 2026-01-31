@@ -342,10 +342,15 @@ const DataService = {
           if (row[0]) {
             const key = String(row[0]).toLowerCase().trim();
             const value = row[1];
+            
+            // Guarda com a chave original também
             config[row[0]] = value;
+            config[key] = value;
             
             // Mapeia chaves conhecidas para nomes padronizados
-            if (key === 'nome' || key === 'nome_cliente' || key === 'cliente') {
+            if (key === 'nome' || key === 'nome_cliente' || key === 'cliente' || 
+                key === 'nome cliente' || key === 'empresa' || key === 'razao_social' ||
+                key === 'razão social' || key === 'razao social') {
               config.nome_cliente = value;
             }
             if (key === 'plano' || key === 'plan') {
