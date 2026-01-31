@@ -364,10 +364,44 @@ var AlertService = {
     return alerts;
   },
   
-  // 6. Verifica saldo baixo em contas
-  checkLowBalance: function(accounts) {
+  // 6. Verifica saldo baixo em contas (e BANCOS)
+  checkLowBalance: function(accounts, banks) {
     var alerts = [];
     
+    // Verifica BANCOS primeiro (mais importante)
+    if (banks && banks.length > 0) {
+      banks.forEach(function(bank) {
+        if (bank.balance < 0) {
+          alerts.push({
+            type: AlertService.ALERT_TYPES.SALDO_BAIXO,
+            priority: AlertService.PRIORITY.CRITICAL,
+            title: '🔴 Banco com Saldo Negativo',
+            message: bank.name + ' está com saldo negativo',
+            value: bank.balance,
+            details: 'Saldo: R$ ' + bank.balance.toFixed(2),
+            action: 'Transfira recursos ou negocie com o banco.',
+            icon: 'alert-triangle',
+            color: 'red',
+            account: bank.name
+          });
+        } else if (bank.balance < 1000) {
+          alerts.push({
+            type: AlertService.ALERT_TYPES.SALDO_BAIXO,
+            priority: AlertService.PRIORITY.MEDIUM,
+            title: '💵 Saldo Baixo no Banco',
+            message: bank.name + ' com saldo baixo',
+            value: bank.balance,
+            details: 'Saldo: R$ ' + bank.balance.toFixed(2),
+            action: 'Considere fazer uma reserva.',
+            icon: 'wallet',
+            color: 'yellow',
+            account: bank.name
+          });
+        }
+      });
+    }
+    
+    // Verifica contas/projetos
     accounts.forEach(function(acc) {
       if (acc.balance < 0) {
         alerts.push({
