@@ -142,6 +142,17 @@ let ADVANCED_FILTERS = {
         // Default
         return 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300';
     }
+    
+    // Expõe funções utilitárias globalmente para os outros scripts
+    window.getBlurClass = getBlurClass;
+    window.isTransactionPaid = isTransactionPaid;
+    window.isTransactionPending = isTransactionPending;
+    window.getStatusStyle = getStatusStyle;
+    window.formatCurrency = formatCurrency;
+    window.formatCurrencyCompact = formatCurrencyCompact;
+    window.formatDate = formatDate;
+    window.formatDateBR = formatDateBR;
+    window.parseDate = parseDate;
 
     function showToast(message, type = 'info', duration = 3000) {
         const toast = document.createElement('div');
