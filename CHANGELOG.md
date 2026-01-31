@@ -1,10 +1,55 @@
-# ✨ Melhorias Implementadas - Dashboard Financeiro B2B v3.2
+# ✨ Melhorias Implementadas - Dashboard Financeiro B2B v3.3
 
 ## 📋 Resumo das Implementações
 
 Data: Janeiro 2026
-Versão: 3.2.0
+Versão: 3.3.0
 Status: ✅ Completo
+
+---
+
+## 🔧 Correções v3.3.0 (Janeiro 2026)
+
+### CORREÇÕES CRÍTICAS DE INCONSISTÊNCIA
+
+#### 1. Funções Globais Centralizadas
+
+**Problema**: Verificações de status de transação estavam espalhadas pelo código com diferentes implementações (case-sensitive vs case-insensitive), causando inconsistências entre alertas e cards.
+
+**Solução**: Criadas funções globais em `JS_Core.html`:
+- `isTransactionPaid(t)` - Verifica se transação está paga/concluída/recebida (case-insensitive)
+- `isTransactionPending(t)` - Verifica se transação está pendente
+- `getStatusStyle(status)` - Retorna classes CSS para badge de status
+- `getBlurClass()` - Retorna classe de blur para modo privacidade
+- `formatDateBR(date)` - Formata data para pt-BR
+- `formatCurrencyCompact(val)` - Formata moeda de forma compacta (R$ 1,5K)
+
+#### 2. Inconsistência entre Alertas e Cards
+
+**Problema**: O alerta "Contas a Receber em Atraso" mostrava R$ 5.000, mas o card "A Receber" mostrava R$ 0,00.
+
+**Causa raiz**: O alerta verificava `t.status !== 'Recebido'` (case-sensitive), enquanto na planilha estava escrito de forma diferente.
+
+**Arquivos corrigidos**:
+- `JS_Alerts.html` - Agora usa `isTransactionPending()`
+- `JS_Logic.html` - Funções `calculateOverdue`, `calculateDREData`, `getCashFlowProjection` atualizadas
+- `AlertService.js` - Todas verificações agora são case-insensitive
+
+#### 3. Variáveis Não Definidas
+
+**Erros corrigidos**:
+- `blurClass is not defined` - Função `getBlurClass()` movida para `JS_Core.html` (global)
+- `formatDateBR is not defined` - Função adicionada em `JS_Core.html`
+- `formatCurrencyCompact is not defined` - Função adicionada em `JS_Core.html`
+- `getStatusStyle is not defined` - Função adicionada em `JS_Core.html`
+
+---
+
+### Status aceitos como "PAGO" (case-insensitive):
+- `pago`, `Pago`, `PAGO`
+- `concluído`, `Concluído`, `CONCLUÍDO`
+- `concluido` (sem acento)
+- `recebido`, `Recebido`, `RECEBIDO`
 
 ---
 
