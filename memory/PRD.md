@@ -54,6 +54,7 @@ Sistema de gestão financeira B2B baseado em Google Apps Script + Google Sheets,
 - [x] Modo escuro/claro
 - [x] Modo privacidade (blur)
 - [x] Saldo dinâmico de bancos/contas
+- [x] Alertas automáticos
 
 ### Não-Funcionais
 - [x] Cache de 10 minutos
@@ -65,36 +66,53 @@ Sistema de gestão financeira B2B baseado em Google Apps Script + Google Sheets,
 
 ## O Que Foi Implementado
 
-### v3.5.0 - Janeiro 2026
+### v3.5.0 - Janeiro 2026 (REVISÃO COMPLETA)
+
+#### Correções de Lógica de Negócio:
 - ✅ **Saldo dinâmico de bancos**: `saldo_atual = saldo_inicial + entradas - saídas (pagos)`
 - ✅ **Saldo dinâmico de contas/projetos**: Considera todas as transações associadas
-- ✅ **Patrimônio total calculado**: Soma dos saldos dos bancos
+- ✅ **Patrimônio total calculado**: Soma dos saldos dos bancos (não das contas)
+- ✅ **Projeção de fluxo de caixa**: Parte do patrimônio atual dos bancos
+- ✅ **Score de saúde financeira**: Usa patrimônio correto
+- ✅ **Insights inteligentes**: Runway e Capital de Giro usam patrimônio dos bancos
+- ✅ **Sistema de alertas**: Usa bancos para projeção e saldo baixo
+
+#### Correções de UX:
 - ✅ **Botão Atualizar aprimorado**: Limpa cache + reseta filtros + destrói gráficos
 - ✅ **KPIs reposicionados**: Entradas/Saídas/Saldo no topo da página
 - ✅ **Design renovado KPIs**: Cards com gradientes coloridos
-- ✅ **Projeção de fluxo de caixa corrigida**: Parte do patrimônio atual
 
 ### v3.4.0 - Janeiro 2026
-- ✅ **Correção do bug das metas**: Função `calculateGoalProgress()` reescrita
-- ✅ **Correção da busca de API key**: Busca do cliente OU da CONFIG_GLOBAL
+- ✅ **Bug das metas**: Objetivos (receitas) agora progridem com Entradas
+- ✅ **API Key da IA**: Busca do cliente OU da CONFIG_GLOBAL
 - ✅ **Limites de IA dinâmicos**: Lidos da CONFIG_GLOBAL
 - ✅ **Script de atualização**: `ATUALIZAR_ADMIN_MASTER.gs`
-- ✅ **Documentação atualizada**: CHANGELOG, GUIA_ATUALIZACAO_ADMIN
 
-### v3.3.0 - Janeiro 2026
-- Funções globais centralizadas para verificação de status
-- Correção de inconsistências entre alertas e cards
-- Sistema de importação restrito à equipe
+---
+
+## Arquivos Modificados na v3.5.0
+
+| Arquivo | Modificação |
+|---------|-------------|
+| `DataService.js` | Cálculo dinâmico de saldo de bancos e contas |
+| `Controller.js` | Limpeza correta de cache no refresh |
+| `JS_Events.html` | Reset de variáveis no refresh |
+| `JS_Render.html` | KPIs no topo, patrimônio total correto |
+| `JS_Logic.html` | Projeção e saúde financeira usando bancos |
+| `JS_EnhancedInsights.html` | Insights usando patrimônio correto |
+| `AlertService.js` | Alertas usando bancos |
 
 ---
 
 ## Backlog Priorizado
 
 ### P0 - Crítico
-- [x] Bug das metas não progredindo para receitas (CORRIGIDO v3.4.0)
+- [x] Bug das metas não progredindo (CORRIGIDO v3.4.0)
 - [x] Erro "IA não configurada" (CORRIGIDO v3.4.0)
 - [x] Saldo dos bancos fixo (CORRIGIDO v3.5.0)
 - [x] Cache não limpando no refresh (CORRIGIDO v3.5.0)
+- [x] Insights usando patrimônio errado (CORRIGIDO v3.5.0)
+- [x] Alertas usando contas ao invés de bancos (CORRIGIDO v3.5.0)
 
 ### P1 - Alta Prioridade
 - [ ] Alertas automáticos por email (plano Enterprise)
@@ -106,35 +124,29 @@ Sistema de gestão financeira B2B baseado em Google Apps Script + Google Sheets,
 - [ ] Dashboard mobile app (PWA)
 - [ ] Multi-idiomas (i18n)
 
-### P3 - Baixa Prioridade
-- [ ] Machine Learning para previsões
-- [ ] Reconhecimento de padrões/anomalias
-- [ ] Integração Slack/Discord
-
----
-
-## Próximas Tarefas
-
-1. **Validar correções**: Testar o dashboard com dados reais do cliente
-2. **Verificar saldo dos bancos**: Confirmar que o patrimônio está calculando corretamente
-3. **Testar botão Atualizar**: Verificar que não há mais dados fantasmas
-4. **Testar metas de receita**: Confirmar que objetivos progridem com entradas
-
 ---
 
 ## Lógica de Negócio Importante
 
 ### Cálculo do Saldo de Banco
 ```javascript
+// Para BANCOS: considera apenas transações PAGAS
 saldo_atual = saldo_inicial + SUM(entradas_pagas) - SUM(saidas_pagas)
+
+// Status considerados como "pago":
+['pago', 'concluído', 'concluido', 'recebido']
 ```
-- `saldo_inicial`: Valor na coluna "Saldo" da aba BANCOS
-- `entradas_pagas`: Transações com status "Pago", "Concluído" ou "Recebido" do tipo "Entrada"
-- `saidas_pagas`: Transações com status "Pago", "Concluído" ou "Recebido" do tipo "Saída"
+
+### Cálculo do Saldo de Conta/Projeto
+```javascript
+// Para CONTAS: considera TODAS as transações associadas
+saldo_atual = saldo_inicial + SUM(entradas) - SUM(saidas)
+```
 
 ### Cálculo do Patrimônio Total
 ```javascript
-patrimonio_total = SUM(saldo_atual de todos os bancos)
+patrimonio_total = SUM(saldo_atual de todos os BANCOS)
+// NÃO usa contas para patrimônio
 ```
 
 ### Tipos de Meta Suportados
@@ -144,6 +156,14 @@ patrimonio_total = SUM(saldo_atual de todos os bancos)
 
 // GASTOS (progride com Saídas)
 ['gasto', 'saída', 'saida', 'despesa', 'limite']
+```
+
+### Verificação de Status de Transação (CASE INSENSITIVE)
+```javascript
+function isTransactionPaid(t) {
+  const status = t.status.toLowerCase().trim();
+  return ['pago', 'concluído', 'concluido', 'recebido'].includes(status);
+}
 ```
 
 ---
