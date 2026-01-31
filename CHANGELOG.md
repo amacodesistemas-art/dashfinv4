@@ -1,10 +1,139 @@
-# ✨ Melhorias Implementadas - Dashboard Financeiro B2B v3.3
+# ✨ Melhorias Implementadas - Dashboard Financeiro B2B v3.4
 
 ## 📋 Resumo das Implementações
 
 Data: Janeiro 2026
-Versão: 3.3.0
+Versão: 3.4.0
 Status: ✅ Completo
+
+---
+
+## 🔧 Correções v3.4.0 (Janeiro 2026)
+
+### CORREÇÃO CRÍTICA: Bug no Painel de Metas
+
+**Problema**: Os objetivos/metas de RECEITA (como "EMPRESA CLIENTE") estavam aparecendo na seção "Limites de Gastos" ao invés de "Objetivos (Receitas)". Além disso, a barra de progresso não avançava porque o sistema estava calculando apenas transações do tipo "Saída" para todas as metas.
+
+**Causa raiz**: A função `calculateGoalProgress()` em `JS_Logic.html`:
+1. Filtrava TODAS as metas por `t.type === 'Saída'`, ignorando que metas de receita precisam filtrar por `'Entrada'`
+2. Verificava `meta.tipo === 'Objetivo'` mas na planilha o tipo era `'Receita'`
+
+**Solução implementada**:
+- Normalização do tipo de meta para case-insensitive
+- Detecção automática se é objetivo ou gasto baseado em múltiplas variações: `receita`, `objetivo`, `entrada`, `sonho`, `gasto`, `saída`, `despesa`, `limite`
+- Filtragem correta de transações por tipo (Entrada para objetivos, Saída para gastos)
+- Lógica de status diferenciada: para objetivos, quanto mais próximo de 100% MELHOR; para gastos, ultrapassar 100% é RUIM
+
+**Arquivos modificados**:
+- `JS_Logic.html` - Função `calculateGoalProgress()` completamente reescrita
+- `JS_Render.html` - Função `renderGoalsCard()` atualizada com visual diferenciado
+
+---
+
+### CORREÇÃO: Mensagem de IA não configurada
+
+**Problema**: Clientes viam "Recurso de IA não configurado. Entre em contato com seu consultor para ativar." mesmo quando a API estava configurada na planilha ADMIN_MASTER (CONFIG_GLOBAL).
+
+**Causa raiz**: A função `askAIFinancialQuestion()` não estava buscando a API key da CONFIG_GLOBAL quando não encontrava na planilha do cliente.
+
+**Solução implementada**:
+- A função agora busca API key em ordem:
+  1. Aba CONFIG da planilha do cliente (`ai_api_key`)
+  2. Aba CONFIG_GLOBAL da ADMIN_MASTER (`openai_api_key`)
+- Mensagem de erro mais clara indicando como configurar
+
+**Arquivos modificados**:
+- `Main.js` - Função `askAIFinancialQuestion()` atualizada
+
+---
+
+### MELHORIA: Configurações via ADMIN_MASTER
+
+**Problema**: Várias configurações estavam hardcoded no código, ignorando os valores configurados na planilha ADMIN_MASTER (CONFIG_GLOBAL).
+
+**Solução implementada**:
+- Limites de uso de IA por plano agora são lidos da CONFIG_GLOBAL
+- Chaves suportadas: `limite_ia_basic`, `limite_ia_professional`, `limite_ia_enterprise`
+- Se não encontrar, usa valores padrão do código como fallback
+
+**Arquivos modificados**:
+- `Main.js` - Função `checkAIUsageLimit()` atualizada
+
+---
+
+### NOVO: Script para Atualizar ADMIN_MASTER
+
+**Arquivo criado**: `scripts/ATUALIZAR_ADMIN_MASTER.gs`
+
+**Funcionalidades**:
+- Cria/atualiza aba CONFIG_GLOBAL com todas as configurações necessárias
+- Cria aba PLANOS_FEATURES com definição visual dos planos
+- Cria aba FEATURES_POR_PLANO com matriz de features x planos
+- Verifica e atualiza aba CLIENTES com novas colunas
+- Não apaga dados existentes - apenas adiciona o que falta
+- Funções auxiliares: testar API key, resetar contadores, listar clientes
+
+**Como usar**:
+1. Abra a planilha ADMIN_MASTER
+2. Vá em Extensões > Apps Script
+3. Cole o código do arquivo
+4. Execute `atualizarAdminMaster()`
+
+---
+
+### SOBRE O ERRO content.js no Console
+
+**Observação**: O erro `content.js: Cannot read properties of null (reading 'classList')` **NÃO é do código do dashboard**. É causado por extensões do navegador (LastPass, Grammarly, etc.).
+
+**Como confirmar**: Abra o sistema em uma janela anônima (sem extensões). O erro não aparecerá.
+
+---
+
+## 📊 Nova Estrutura da ADMIN_MASTER
+
+### Aba CONFIG_GLOBAL (atualizada)
+
+| Chave | Valor | Descrição |
+|-------|-------|-----------|
+| openai_api_key | sk-xxx... | Chave da API OpenAI |
+| limite_ia_basic | 0 | Limite para plano Básico |
+| limite_ia_professional | 30 | Limite para plano Profissional |
+| limite_ia_enterprise | -1 | Limite para plano Enterprise (-1 = ilimitado) |
+| email_admin | admin@... | Email do administrador |
+| emails_equipe | a@..., b@... | Emails da equipe (separados por vírgula) |
+| modelo_ia | gpt-4o-mini | Modelo OpenAI a usar |
+| max_tokens_ia | 400 | Máximo de tokens por resposta |
+
+### Aba FEATURES_POR_PLANO (nova)
+
+| Feature | Descrição | Basic | Professional | Enterprise |
+|---------|-----------|-------|--------------|------------|
+| dashboard | Dashboard principal | TRUE | TRUE | TRUE |
+| dre | DRE Gerencial | FALSE | TRUE | TRUE |
+| ai_insights | Chatbot com IA | FALSE | TRUE | TRUE |
+| alerts | Alertas automáticos | FALSE | FALSE | TRUE |
+
+---
+
+## 📝 Tipos de Metas Suportados
+
+Na aba METAS da planilha do cliente, a coluna "Tipo" agora aceita:
+
+**Para OBJETIVOS (progride com ENTRADAS)**:
+- `Receita`
+- `Objetivo`
+- `Entrada`
+- `Sonho`
+- `Meta_Receita`
+
+**Para GASTOS/LIMITES (progride com SAÍDAS)**:
+- `Gasto`
+- `Saída`
+- `Saida`
+- `Despesa`
+- `Limite`
+
+Todos são case-insensitive (funciona maiúsculo, minúsculo ou misto).
 
 ---
 
