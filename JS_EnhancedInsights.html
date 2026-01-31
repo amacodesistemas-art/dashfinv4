@@ -177,6 +177,7 @@ function generateEnhancedInsights(currentStats, lastStats, currentTxs, allTxs) {
   }
   
   // 9. Capital de Giro
+  // CORRIGIDO: Usa patrimônio já calculado acima
   if (totalPatrimonio > 0 && currentStats.saidas > 0) {
     const workingCapitalMonths = totalPatrimonio / (currentStats.saidas / ((END_DATE - START_DATE) / (1000 * 60 * 60 * 24 * 30)));
     
