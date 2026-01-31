@@ -83,7 +83,11 @@ var AlertService = {
       var dateStr = checkDate.toISOString().split('T')[0];
       
       transactions.forEach(function(t) {
-        if (t.date === dateStr && t.status !== 'Pago' && t.status !== 'Concluído') {
+        // Verificação CASE INSENSITIVE
+        var status = (t.status || '').toLowerCase().trim();
+        var isPending = status !== 'pago' && status !== 'concluído' && status !== 'concluido' && status !== 'recebido';
+        
+        if (t.date === dateStr && isPending) {
           if (t.type === 'Entrada') {
             projection += t.value;
           } else {
