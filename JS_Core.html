@@ -53,6 +53,20 @@ let ADVANCED_FILTERS = {
     // UTILITÁRIOS E FORMATADORES
     // ===================================
     const formatCurrency = (val) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
+    
+    // Formata moeda de forma compacta (ex: R$ 1,5K, R$ 2,3M)
+    const formatCurrencyCompact = (val) => {
+        if (val === null || val === undefined) return 'R$ 0';
+        const absVal = Math.abs(val);
+        if (absVal >= 1000000) {
+            return (val / 1000000).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 1 }).replace('R$', 'R$') + 'M';
+        }
+        if (absVal >= 1000) {
+            return (val / 1000).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 1 }).replace('R$', 'R$') + 'K';
+        }
+        return formatCurrency(val);
+    };
+    
     const parseDate = (str) => { const [y, m, d] = str.split('-'); return new Date(y, m - 1, d); }
     const formatDate = (dateStr) => {
         if(!dateStr) return "-";
