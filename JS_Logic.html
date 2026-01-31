@@ -86,7 +86,7 @@
 
     // Calcular DRE Gerencial
     function calculateDREData(txs) {
-        const realized = txs.filter(t => t.status === 'Pago' || t.status === 'Concluído');
+        const realized = txs.filter(t => isTransactionPaid(t));
 
         const groups = {
             'Receita': 0, 'Custo Variável': 0, 'Despesa Fixa': 0, 'Investimento': 0, 'Não Operacional': 0
@@ -116,7 +116,8 @@
         today.setHours(0,0,0,0);
         return txs.filter(t => {
             const tDate = parseDate(t.date);
-            return tDate < today && t.status !== 'Pago' && t.status !== 'Concluído' && t.type === 'Entrada';
+            const isEntrada = t.type && t.type.toLowerCase().trim() === 'entrada';
+            return tDate < today && isTransactionPending(t) && isEntrada;
         }).reduce((acc, t) => acc + t.value, 0);
     }
 
@@ -134,7 +135,7 @@
             const dateStr = d.toISOString().split('T')[0]; 
             
             // Soma APENAS o que NÃO está pago (Pendentes) para projetar
-            const movDia = txs.filter(t => t.date === dateStr && t.status !== 'Pago' && t.status !== 'Concluído')
+            const movDia = txs.filter(t => t.date === dateStr && isTransactionPending(t))
                 .reduce((acc, t) => acc + (t.type==='Entrada' ? t.value : -t.value), 0);
             
             projectionBalance += movDia;
