@@ -45,9 +45,14 @@ BANCO (onde o dinheiro está fisicamente)
 #### Correções Críticas
 
 1. **Botão de Importação oculto para clientes** 
-   - Feature flag `import_enabled` adicionada em todos os planos
-   - Valor `false` para todos planos de cliente
-   - Novo plano `admin` com `import_enabled: true` para equipe
+   - Sistema verifica email do usuário logado via `Session.getActiveUser().getEmail()`
+   - Compara com lista de `emails_equipe` configurada na planilha
+   - Se for da equipe, habilita `import_enabled: true` dinamicamente
+   
+   **Como configurar**: Adicionar na aba CONFIG:
+   ```
+   emails_equipe | seu@email.com, outro@email.com
+   ```
 
 2. **Nome da empresa corrigido**
    - Função `readConfig()` aprimorada com mapeamento expandido de chaves
@@ -60,8 +65,8 @@ BANCO (onde o dinheiro está fisicamente)
    - Novos passos sobre filtros e gráficos
 
 **Arquivos modificados**:
-- `DataService.js` - Features e readConfig
-- `PlanManager.js` - Consistência de features
+- `DataService.js` - Função `isStaffUser()` + `readConfig()` aprimorada
+- `AdminService.js` - Função `getStaffEmails()`
 - `JS_Init.html` - Condição de exibição
 - `JS_Onboarding.html` - Passos atualizados
 - `CHANGELOG.md` - Documentação
