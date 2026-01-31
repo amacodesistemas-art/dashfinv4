@@ -27,7 +27,8 @@ const PLAN_FEATURES = {
       dre: false,
       ai_classification: false,
       ai_insights: false,
-      predictive_analytics: false
+      predictive_analytics: false,
+      import_enabled: false // Cliente não pode importar
     }
   },
   
@@ -47,7 +48,8 @@ const PLAN_FEATURES = {
       // IA ainda desabilitada
       ai_classification: false,
       ai_insights: false,
-      predictive_analytics: false
+      predictive_analytics: false,
+      import_enabled: false // Cliente não pode importar
     }
   },
   
@@ -68,7 +70,8 @@ const PLAN_FEATURES = {
       ai_insights: true,
       predictive_analytics: true,
       priority_support: true,
-      custom_reports: true
+      custom_reports: true,
+      import_enabled: false // Cliente não pode importar
     }
   }
 };
