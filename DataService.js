@@ -510,20 +510,22 @@ const DataService = {
     const lastRow = sheet ? Math.max(2, sheet.getLastRow()) : 2;
     if (!sheet || lastRow < 2) return [];
 
-    // Estrutura: ID, Nome, Tipo, Icone, Orcamento_Mensal
-    const data = sheet.getRange(2, 1, lastRow - 1, 5).getValues();
+    // Estrutura: ID, Nome, Tipo, Icone, Orcamento_Mensal, Saldo_Inicial (opcional col 6)
+    const data = sheet.getRange(2, 1, lastRow - 1, 6).getValues();
     return data
       .filter(row => row[0] && String(row[0]).trim() !== '')
-      .map(row => ({
-        id: String(row[0]),
-        name: String(row[1]),
-        type: String(row[2]),
-        icon: row[3] || '📁',
-        budget: parseFloat(row[4]) || 0,
-        // Para compatibilidade com frontend antigo, balance vem da soma de transações
-        // ou será calculado depois com base nos bancos
-        balance: 0
-      }));
+      .map(row => {
+        const saldoInicial = parseFloat(row[5]) || 0;
+        return {
+          id: String(row[0]),
+          name: String(row[1]),
+          type: String(row[2]),
+          icon: row[3] || '📁',
+          budget: parseFloat(row[4]) || 0,
+          balanceInicial: saldoInicial, // Saldo inicial (se houver na planilha)
+          balance: saldoInicial // Será recalculado no fetchAllData
+        };
+      });
   },
   
   // NOVO: Lê os bancos
