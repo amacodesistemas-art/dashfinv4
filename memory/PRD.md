@@ -1,287 +1,168 @@
-# Dashboard Financeiro B2B - Product Requirements Document
+# PRD - Dashboard Financeiro B2B (DashFinV4)
 
-## Problema Original
+## Informações do Projeto
 
-Sistema de dashboard financeiro B2B profissional para consultoria financeira atender múltiplos clientes. O cliente da consultoria visualiza seu fluxo financeiro e tem insights sobre saúde financeira - **apenas visualização, sem inserir ou enviar dados**. Funcionalidades de importação e edição são exclusivas da equipe de consultoria.
+**Nome**: Dashboard Financeiro B2B Multi-Tenant
+**Versão**: 3.4.0
+**Última Atualização**: Janeiro 2026
+**Repositório**: dashfinv4 (GitHub conectado ao Emergent)
 
-## Hierarquia de Dados (ATUALIZADA)
+---
 
-```
-BANCO (onde o dinheiro está fisicamente)
-├── Nubank, Inter, Itaú, Caixa Físico...
-│
-└── CONTA/PROJETO (para que serve o dinheiro)
-    ├── MOTO, CASA, EMPRESA X...
-    │
-    └── TRANSAÇÃO (movimento financeiro)
-        ├── Pertence a 1 BANCO + 1 CONTA
-        └── SUBCATEGORIA (FINANCIAMENTO, MULTA, LUZ...)
-```
+## Visão Geral
 
-**Importante:** Uma CONTA pode movimentar em VÁRIOS bancos.
+Sistema de gestão financeira B2B baseado em Google Apps Script + Google Sheets, com arquitetura multi-tenant para atender múltiplos clientes com uma única base de código.
 
-## Modelo de Negócio (ATUALIZADO v3.5)
+### Arquitetura
+- **Frontend**: HTML + JavaScript (Vanilla) + Tailwind CSS
+- **Backend**: Google Apps Script
+- **Banco de Dados**: Google Sheets
+- **IA**: OpenAI GPT-4o-mini
 
-### Planos para Clientes:
+---
 
-| Plano | Preço | IA | DRE | Alertas | Importação |
-|-------|-------|-----|-----|---------|------------|
-| **Básico** | R$ 97/mês | ❌ | ❌ | ❌ | ❌ |
-| **Intermediário** | R$ 197/mês | ❌ | ✅ | ❌ | ❌ |
-| **Avançado** | R$ 397/mês | ✅ | ✅ | ✅ | ❌ |
+## Personas de Usuário
 
-### Plano para Equipe Interna:
+### 1. Cliente Final
+- Acessa o dashboard via URL com parâmetro `?client=ID`
+- Visualiza dados financeiros, metas, gráficos
+- Usa chatbot de IA (planos Profissional/Enterprise)
 
-| Plano | Preço | Todas Features | Importação |
-|-------|-------|----------------|------------|
-| **Admin** | Interno | ✅ | ✅ |
+### 2. Equipe de Consultoria (Staff)
+- Acesso via email cadastrado na lista `emails_equipe`
+- Pode importar OFX/CSV
+- Acesso a todas as funcionalidades
 
-**IMPORTANTE**: Clientes NUNCA veem funcionalidades de importação/edição de dados.
+### 3. Administrador
+- Gerencia a planilha ADMIN_MASTER
+- Configura planos, limites de IA, API keys
+- Monitora uso do sistema
+
+---
+
+## Requisitos Core (Estáticos)
+
+### Funcionais
+- [x] Dashboard com KPIs em tempo real
+- [x] Filtros de período (semana, mês, trimestre, ano, customizado)
+- [x] Visualização de transações com paginação
+- [x] Gráficos de evolução e distribuição
+- [x] Sistema de metas (gastos e receitas)
+- [x] DRE Gerencial
+- [x] Chatbot com IA
+- [x] Exportação CSV/PDF
+- [x] Modo escuro/claro
+- [x] Modo privacidade (blur)
+
+### Não-Funcionais
+- [x] Cache de 10 minutos
+- [x] Responsivo (mobile, tablet, desktop)
+- [x] Atalhos de teclado
+- [x] Onboarding para novos usuários
+
+---
 
 ## O Que Foi Implementado
 
-### Versão 3.5.0 (Janeiro 2026) ✅ ATUAL
+### v3.4.0 - Janeiro 2026
+- ✅ **Correção do bug das metas**: Função `calculateGoalProgress()` reescrita para calcular corretamente objetivos (receitas) e gastos (limites)
+- ✅ **Correção da busca de API key**: Agora busca da CONFIG do cliente OU da CONFIG_GLOBAL da ADMIN_MASTER
+- ✅ **Limites de IA dinâmicos**: Lidos da CONFIG_GLOBAL ao invés de hardcoded
+- ✅ **Script de atualização**: `ATUALIZAR_ADMIN_MASTER.gs` para configurar a planilha admin
+- ✅ **Documentação atualizada**: CHANGELOG, GUIA_ATUALIZACAO_ADMIN, ESTRUTURA_PLANILHA
 
-#### Correções Críticas
+### v3.3.0 - Janeiro 2026
+- Funções globais centralizadas para verificação de status
+- Correção de inconsistências entre alertas e cards
+- Sistema de importação restrito à equipe
 
-1. **Botão de Importação oculto para clientes** 
-   - Sistema verifica email do usuário logado via `Session.getActiveUser().getEmail()`
-   - Compara com lista de `emails_equipe` configurada na planilha
-   - Se for da equipe, habilita `import_enabled: true` dinamicamente
-   
-   **Como configurar**: Adicionar na aba CONFIG:
-   ```
-   emails_equipe | seu@email.com, outro@email.com
-   ```
+### v3.2.0 - Janeiro 2026
+- Botão de importação visível apenas para equipe
+- Correção do nome da empresa mostrando "desconhecido"
+- Onboarding renovado com 8 passos
 
-2. **Nome da empresa corrigido**
-   - Função `readConfig()` aprimorada com mapeamento expandido de chaves
-   - Reconhece variações: nome, Nome, nome_cliente, Cliente, Empresa, razao_social
-   - Fallback seguro para "Cliente" se não encontrado
-
-3. **Onboarding atualizado**
-   - 8 passos detalhados (era 6)
-   - Descrições mais completas
-   - Novos passos sobre filtros e gráficos
-
-**Arquivos modificados**:
-- `DataService.js` - Função `isStaffUser()` + `readConfig()` aprimorada
-- `AdminService.js` - Função `getStaffEmails()`
-- `JS_Init.html` - Condição de exibição
-- `JS_Onboarding.html` - Passos atualizados
-- `CHANGELOG.md` - Documentação
-
-### Versão 3.4.0 (Dezembro 2025)
-
-#### Nova Estrutura de Dados
-- **BANCOS** (nova aba): Onde o dinheiro está (Nubank, Inter, etc.)
-- **CONTAS** (renomeada): Projetos/Centros de custo (MOTO, CASA, etc.)
-- **TRANSACOES** com campo Banco
-
-#### Novas Visões no Dashboard
-- **Visão por Bancos**: Saldo, entradas/saídas por banco
-- **Visão por Contas/Projetos**: Gastos por projeto, subcategorias
-- **Navegação por abas**: Dashboard | Bancos | Contas | DRE
-
-#### Arquitetura Multi-Cliente
-- Sistema centralizado (1 código = N clientes)
-- ADMIN_MASTER para controle
-- URL com parâmetro ?client=ID
-
-#### Funcionalidades
-- Alertas automáticos (6 tipos)
-- Importação OFX/CSV
-- Categorização com IA
-- Chatbot financeiro
-
-## Estrutura de Abas (Planilha do Cliente)
-
-| Aba | Descrição |
-|-----|-----------|
-| CONFIG | Configurações do cliente |
-| BANCOS | Onde o dinheiro está (NOVO) |
-| CONTAS | Projetos/Centros de custo |
-| TRANSACOES | Movimentações (com campo Banco) |
-| CATEGORIAS | Mapeamento DRE |
-| METAS | Objetivos financeiros |
-| REGRAS_CATEGORIZACAO | Regras de importação |
-
-## Documentação Disponível
-
-| Arquivo | Descrição |
-|---------|-----------|
-| `/app/docs/DOCUMENTACAO_TECNICA_COMPLETA.md` | Guia completo para desenvolvedores |
-| `/app/docs/GUIA_PASSO_A_PASSO_COMPLETO.md` | Setup do sistema |
-| `/app/docs/NOVA_ESTRUTURA_BANCOS.md` | Estrutura de dados |
-| `/app/ROADMAP_COMERCIAL.md` | Precificação e roadmap |
+### v3.1.0 - Dezembro 2025
+- Chatbot de IA respeitando filtros de data
+- Parsing de datas corrigido
+- Logs para debug
 
 ---
-*Última atualização: Dezembro 2025 - v3.4.0*
 
-#### Importação de Extratos (`ImportService.js`)
-- Parser de arquivos OFX (padrão bancário)
-- Parser de arquivos CSV configurável
-- Detecção de duplicatas
-- Aba de conciliação para revisão
-- Categorização automática na importação
-- Interface drag-and-drop
+## Backlog Priorizado
 
-#### Frontend (`JS_Alerts.html`, `JS_Import.html`)
-- Painel de alertas com prioridades
-- Modal de importação com preview
-- Configuração de CSV dinâmica
-- Link direto para planilha de revisão
+### P0 - Crítico
+- [x] Bug das metas não progredindo para receitas (CORRIGIDO v3.4.0)
+- [x] Erro "IA não configurada" mesmo com API na ADMIN_MASTER (CORRIGIDO v3.4.0)
 
-### Versão 3.2.0 (Dezembro 2025)
-- Service Worker corrigido
-- Chatbot IA com contexto de datas
-- Sistema de limites de IA por plano
-- Preços atualizados
+### P1 - Alta Prioridade
+- [ ] Alertas automáticos por email (plano Enterprise)
+- [ ] Relatórios via WhatsApp
+- [ ] Análise preditiva de fluxo de caixa
 
-### Versão 3.1.0 (Dezembro 2025)
-- Correção do contexto de datas no chatbot
-- Bug de acentuação corrigido
+### P2 - Média Prioridade
+- [ ] Integração com Open Banking
+- [ ] Dashboard mobile app (PWA)
+- [ ] Multi-idiomas (i18n)
 
-## Arquitectura
+### P3 - Baixa Prioridade
+- [ ] Machine Learning para previsões
+- [ ] Reconhecimento de padrões/anomalias
+- [ ] Integração Slack/Discord
+
+---
+
+## Próximas Tarefas
+
+1. **Validar correções**: Testar o painel de metas com dados reais do cliente
+2. **Executar script de atualização**: Rodar `ATUALIZAR_ADMIN_MASTER.gs` na planilha admin do cliente
+3. **Configurar API key**: Adicionar a chave OpenAI na CONFIG_GLOBAL
+4. **Atualizar documentação do cliente**: Se necessário, gerar nova documentação técnica
+
+---
+
+## Estrutura de Arquivos Principais
 
 ```
 /app/
-├── Backend (*.js → salvar como *.gs)
-│   ├── Main.js          - Entrypoint, doGet, AI endpoint
-│   ├── DataService.js   - Dados, planos, features
-│   ├── AdminService.js  - Gestão multi-cliente ✨ NEW
-│   ├── AlertService.js  - Alertas automáticos ✨ NEW
-│   ├── CategorizationService.js - Categorização IA ✨ NEW
-│   ├── ImportService.js - Importação OFX/CSV ✨ NEW
-│   ├── ValidationService.js
-│   └── Config.js
-│
-├── Frontend (*.html)
-│   ├── index.html       - Página principal
-│   ├── styles.html      - CSS customizado
-│   ├── JS_Core.html     - Variáveis globais
-│   ├── JS_Alerts.html   - Alertas UI ✨ NEW
-│   ├── JS_Import.html   - Importação UI ✨ NEW
-│   ├── JS_ChatAI.html   - Chatbot
-│   ├── JS_Render.html   - Rendering
+├── Main.js                 # Entry point + Chatbot IA
+├── Config.js               # Configurações
+├── DataService.js          # Leitura de dados
+├── AdminService.js         # Gestão multi-tenant
+├── JS_Logic.html           # Cálculos (incluindo metas)
+├── JS_Render.html          # Renderização UI
+├── JS_ChatAI.html          # Interface do chat
+├── scripts/
+│   ├── CRIAR_ESTRUTURA_CLIENTE.gs
+│   └── ATUALIZAR_ADMIN_MASTER.gs
+├── docs/
+│   ├── DOCUMENTACAO_TECNICA_COMPLETA.md
+│   ├── ESTRUTURA_PLANILHA.md
+│   ├── GUIA_ATUALIZACAO_ADMIN.md
 │   └── ...
-│
-├── PWA
-│   ├── service-worker.html
-│   └── manifest (dinâmico)
-│
-└── Documentação (*.md)
-    ├── GUIA_MULTI_CLIENTE.md ✨ NEW
-    ├── ESTRUTURA_PLANILHA.md ✨ NEW
-    ├── ROADMAP_COMERCIAL.md ✨ NEW
-    └── ...
+└── CHANGELOG.md
 ```
-
-## Schema da Base de Dados
-
-### Planilha ADMIN_MASTER (Central)
-| Aba | Colunas |
-|-----|---------|
-| CLIENTES | client_id, nome, spreadsheet_id, plano, status, data_inicio, consultas_ia_mes, ultimo_acesso |
-| CONFIG_GLOBAL | chave, valor (API keys, limites) |
-| LOG_SISTEMA | timestamp, client_id, acao, detalhes |
-
-### Planilha do Cliente
-| Aba | Colunas |
-|-----|---------|
-| CONFIG | Plano, Nome, CNPJ, AI_API_KEY |
-| CONTAS | ID, Nome, Tipo, Saldo, Icone |
-| TRANSACOES | Data, Tipo, Categoria, Subcategoria, Valor, Conta, Status, Descrição |
-| CATEGORIAS | Categoria, Grupo_DRE |
-| METAS | Categoria, Meta, Tipo |
-| REGRAS_CATEGORIZACAO | padrao, categoria, subcategoria, tipo ✨ NEW |
-
-## Fluxos Implementados
-
-### 1. Multi-Cliente
-```
-URL: ?client=acme_001
-       ↓
-AdminService.getClientById()
-       ↓
-Valida status → ativo?
-       ↓
-Carrega spreadsheet_id do cliente
-       ↓
-Renderiza dashboard
-```
-
-### 2. Importação de Extrato
-```
-Upload OFX/CSV
-       ↓
-Parse automático
-       ↓
-Detecta duplicatas
-       ↓
-Categorização (regras → IA)
-       ↓
-Cria aba IMPORT_xxx
-       ↓
-Usuário revisa e aprova
-       ↓
-Transações salvas
-```
-
-### 3. Alertas
-```
-Carrega dados
-       ↓
-AlertService.analyzeAndGenerateAlerts()
-       ↓
-Ordena por prioridade
-       ↓
-Renderiza no dashboard
-       ↓
-Usuário pode dispensar
-```
-
-## Roadmap
-
-### ✅ Completo
-- Dashboard com KPIs
-- Sistema de planos (3 níveis)
-- Chatbot IA com contexto
-- PWA instalável
-- Multi-cliente centralizado
-- Alertas automáticos
-- Importação OFX/CSV
-- Categorização com IA
-
-### 🔜 Próximo
-- Previsão de fluxo de caixa (30/60/90 dias)
-- Notificações WhatsApp/Email
-- Benchmarks do setor
-- Relatórios automáticos
-
-### 📋 Backlog
-- IA conversacional (multi-turn)
-- Exportação PDF avançada
-- App mobile nativo
-- Integração com ERPs
-
-## Integrações
-
-| Serviço | Uso |
-|---------|-----|
-| OpenAI GPT-4o-mini | Chatbot, categorização |
-| Chart.js | Gráficos |
-| Tailwind CSS | Styling |
-| Lucide Icons | Ícones |
-
-## Documentação
-
-| Arquivo | Descrição |
-|---------|-----------|
-| `/app/docs/GUIA_MULTI_CLIENTE.md` | Setup multi-cliente |
-| `/app/docs/ESTRUTURA_PLANILHA.md` | Estrutura de abas |
-| `/app/ROADMAP_COMERCIAL.md` | Precificação e roadmap |
-| `/app/CHANGELOG.md` | Histórico de versões |
 
 ---
-*Última atualização: Dezembro 2025 - v3.3.0*
+
+## Notas Técnicas
+
+### Tipos de Meta Suportados
+```javascript
+// OBJETIVOS (progride com Entradas)
+['receita', 'objetivo', 'entrada', 'sonho', 'meta_receita']
+
+// GASTOS (progride com Saídas)
+['gasto', 'saída', 'saida', 'despesa', 'limite']
+```
+
+### Busca de API Key (ordem)
+1. Aba CONFIG da planilha do cliente (`ai_api_key`)
+2. Aba CONFIG_GLOBAL da ADMIN_MASTER (`openai_api_key`)
+
+### Limites de IA
+- Lidos de `CONFIG_GLOBAL` (`limite_ia_basic`, `limite_ia_professional`, `limite_ia_enterprise`)
+- Se não configurado, usa valores padrão do código
+
+---
+
+**Última Atualização**: Janeiro 2026
