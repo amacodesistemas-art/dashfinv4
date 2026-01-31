@@ -41,12 +41,25 @@ function generateLocalAlerts() {
     const transactions = GLOBAL_DATA.transactions || [];
     const accounts = GLOBAL_DATA.accounts || [];
     
-    // 1. Inadimplência
+    // Função auxiliar para verificar se NÃO está pago (CASE INSENSITIVE - consistente com JS_Logic)
+    const isPendente = (t) => {
+        if (!t.status) return true; // Se não tem status, considera pendente
+        const status = t.status.toLowerCase().trim();
+        return status !== 'pago' && status !== 'concluído' && status !== 'recebido';
+    };
+    
+    // Função auxiliar para tipo (CASE INSENSITIVE)
+    const isEntrada = (t) => {
+        if (!t.type) return false;
+        return t.type.toLowerCase().trim() === 'entrada';
+    };
+    
+    // 1. Inadimplência (Contas a Receber em Atraso)
     let overdueCount = 0;
     let overdueValue = 0;
     
     transactions.forEach(t => {
-        if (t.type === 'Entrada' && t.status !== 'Pago' && t.status !== 'Recebido') {
+        if (isEntrada(t) && isPendente(t)) {
             const tDate = parseDate(t.date);
             if (tDate < today) {
                 overdueCount++;
@@ -73,9 +86,9 @@ function generateLocalAlerts() {
     }
     
     // 2. Vencimentos Hoje
+    const todayStr = today.toISOString().split('T')[0];
     const dueToday = transactions.filter(t => {
-        return t.date === today.toISOString().split('T')[0] && 
-               t.status !== 'Pago' && t.status !== 'Concluído';
+        return t.date === todayStr && isPendente(t);
     });
     
     if (dueToday.length > 0) {
