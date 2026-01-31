@@ -16,15 +16,28 @@ Status: ✅ Completo
 
 **Solução implementada**:
 
-1. **Nova feature flag `import_enabled`**: Adicionada em todos os planos com valor `false` para clientes.
+1. **Verificação de email do usuário**: O sistema agora verifica se o usuário logado está na lista de emails da equipe.
 
-2. **Plano `admin` criado**: Novo plano especial para uso interno da equipe com `import_enabled: true`.
+2. **Duas formas de configurar emails da equipe**:
+   
+   **Opção A - Na aba CONFIG da planilha do cliente:**
+   ```
+   emails_equipe | seuemail@gmail.com, outro@empresa.com
+   ```
+   
+   **Opção B - Na aba CONFIG_GLOBAL da ADMIN_MASTER (modo multi-cliente):**
+   ```
+   emails_equipe | seuemail@gmail.com, outro@empresa.com
+   ```
 
-3. **Verificação no `JS_Init.html`**: O botão de importação agora só é adicionado se `hasFeature('import_enabled')` retornar `true`.
+3. **Lógica de verificação** (`DataService.isStaffUser`):
+   - Obtém email do usuário via `Session.getActiveUser().getEmail()`
+   - Verifica se está na lista `emails_equipe`
+   - Se for staff, habilita `import_enabled: true`
 
 **Arquivos modificados**:
-- `DataService.js` - Adicionada feature `import_enabled` em todos os planos
-- `PlanManager.js` - Consistência com DataService
+- `DataService.js` - Nova função `isStaffUser()` + ajuste em `fetchAllData()`
+- `AdminService.js` - Nova função `getStaffEmails()`
 - `JS_Init.html` - Condição para exibição do botão
 
 ---
