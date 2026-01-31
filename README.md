@@ -1,6 +1,19 @@
 # 📊 Dashboard Financeiro B2B - Sistema Completo
 
+**Versão**: 3.4.0 | **Última Atualização**: Janeiro 2026
+
 Sistema profissional de gestão financeira para empresas B2B, com visualização inteligente, análises avançadas e sincronização com Google Sheets.
+
+---
+
+## 📢 Novidades da v3.4.0
+
+- ✅ **Correção do Painel de Metas**: Objetivos/Receitas agora progridem corretamente com transações de Entrada
+- ✅ **Configuração de IA via ADMIN_MASTER**: API key e limites agora podem ser configurados centralmente
+- ✅ **Script de atualização**: Novo script para atualizar a planilha ADMIN_MASTER automaticamente
+- ✅ **Documentação atualizada**: Guias completos para configuração
+
+---
 
 ## 🚀 Funcionalidades Principais
 
