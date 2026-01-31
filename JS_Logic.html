@@ -209,7 +209,7 @@ function calculateAccountsSummary(allTxs, currentTxs) {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    // Função auxiliar CASE INSENSITIVE
+    // Função auxiliar CASE INSENSITIVE para tipo
     const isSaida = (t) => {
         if (!t.type) return false;
         return t.type.toLowerCase().trim() === 'saída';
@@ -219,32 +219,25 @@ function calculateAccountsSummary(allTxs, currentTxs) {
         if (!t.type) return false;
         return t.type.toLowerCase().trim() === 'entrada';
     };
-    
-    // Verifica se NÃO está pago (aceita Pendente, Aberto, Agendado...)
-    const isPendente = (t) => {
-        if (!t.status) return true; // Se não tem status, considera pendente
-        const status = t.status.toLowerCase().trim();
-        return status !== 'pago' && status !== 'concluído' && status !== 'recebido';
-    };
 
     // 1. ATRASADOS (todo o histórico, antes de hoje)
     const overduePayable = allTxs.filter(t => {
         const tDate = parseDate(t.date);
-        return tDate < today && isPendente(t) && isSaida(t);
+        return tDate < today && isTransactionPending(t) && isSaida(t);
     }).reduce((acc, t) => acc + t.value, 0);
 
     const overdueReceivable = allTxs.filter(t => {
         const tDate = parseDate(t.date);
-        return tDate < today && isPendente(t) && isEntrada(t);
+        return tDate < today && isTransactionPending(t) && isEntrada(t);
     }).reduce((acc, t) => acc + t.value, 0);
 
     // 2. A VENCER NO PERÍODO (Respeita o filtro que o usuário escolheu)
     const scheduledPayable = currentTxs.filter(t => 
-        isPendente(t) && isSaida(t)
+        isTransactionPending(t) && isSaida(t)
     ).reduce((acc, t) => acc + t.value, 0);
 
     const scheduledReceivable = currentTxs.filter(t => 
-        isPendente(t) && isEntrada(t)
+        isTransactionPending(t) && isEntrada(t)
     ).reduce((acc, t) => acc + t.value, 0);
 
     return {
