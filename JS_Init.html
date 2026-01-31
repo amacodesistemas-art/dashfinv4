@@ -152,8 +152,9 @@
                          loadAlerts();
                      }
                      
-                     // Adiciona botão de importação
-                     if (typeof addImportButton === 'function') {
+                     // Adiciona botão de importação APENAS se for equipe interna (não cliente)
+                     // Clientes não podem ver a opção de importação
+                     if (typeof addImportButton === 'function' && hasFeature('import_enabled')) {
                          addImportButton();
                      }
                  }, 1500);

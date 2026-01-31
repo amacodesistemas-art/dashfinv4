@@ -340,9 +340,21 @@ const DataService = {
       }
     }
     
-    // Valores padrão se não encontrados
-    if (!config.nome_cliente) {
-      config.nome_cliente = config['Nome'] || config['nome'] || 'Cliente';
+    // Valores padrão se não encontrados - busca mais abrangente
+    if (!config.nome_cliente || config.nome_cliente === '' || config.nome_cliente === 'undefined') {
+      // Tenta várias variações de chaves
+      config.nome_cliente = config['Nome'] || config['nome'] || 
+                           config['Nome_Cliente'] || config['nome_cliente'] ||
+                           config['NomeCliente'] || config['Cliente'] ||
+                           config['cliente'] || config['Empresa'] ||
+                           config['empresa'] || config['NOME'] ||
+                           config['NOME_CLIENTE'] || 'Cliente';
+    }
+    
+    // Se ainda for vazio ou undefined, usa fallback
+    if (!config.nome_cliente || config.nome_cliente.toString().trim() === '' || 
+        config.nome_cliente === 'undefined' || config.nome_cliente === 'null') {
+      config.nome_cliente = 'Cliente';
     }
     
     return config;
