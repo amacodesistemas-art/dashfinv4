@@ -216,7 +216,8 @@ async function askQuestion(question) {
             end: END_DATE.toISOString().split('T')[0],
             mode: FILTER_MODE
         },
-        viewMode: VIEW_MODE,
+        viewMode: CURRENT_VIEW || 'overview',
+        currentTab: CURRENT_TAB || 'dashboard',
         config: GLOBAL_DATA.config
     };
     
