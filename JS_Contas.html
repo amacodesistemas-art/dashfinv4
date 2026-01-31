@@ -295,6 +295,7 @@ function renderProjectsList(projectsData) {
 function openProjectDetail(projectId) {
     const accounts = GLOBAL_DATA.accounts || [];
     const transactions = GLOBAL_DATA.transactions || [];
+    const blurClass = getBlurClass();
     
     const project = accounts.find(a => String(a.id) === String(projectId));
     if (!project) return;
