@@ -209,27 +209,15 @@ function applyFilters(transactions) {
         today.setHours(0, 0, 0, 0);
         
         if (ADVANCED_FILTERS.status === 'Pendente') {
-            filtered = filtered.filter(t => {
-                if (!t.status) return true;
-                const s = t.status.toLowerCase().trim();
-                const isPago = s === 'pago' || s === 'concluído' || s === 'recebido';
-                return !isPago;
-            });
+            filtered = filtered.filter(t => isTransactionPending(t));
         } 
         else if (ADVANCED_FILTERS.status === 'Pago') {
-            filtered = filtered.filter(t => {
-                if (!t.status) return false;
-                const s = t.status.toLowerCase().trim();
-                return s === 'pago' || s === 'concluído' || s === 'recebido';
-            });
+            filtered = filtered.filter(t => isTransactionPaid(t));
         }
         else if (ADVANCED_FILTERS.status === 'Atrasado') {
             filtered = filtered.filter(t => {
                 const tDate = parseDate(t.date);
-                if (!t.status) return tDate < today;
-                const s = t.status.toLowerCase().trim();
-                const isPago = s === 'pago' || s === 'concluído' || s === 'recebido';
-                return !isPago && tDate < today;
+                return isTransactionPending(t) && tDate < today;
             });
         }
         else {
