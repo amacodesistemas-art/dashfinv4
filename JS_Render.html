@@ -561,6 +561,58 @@ function renderCashFlowDashboard(currentStats, lastStats, currentTxs, health, in
     }).join('') : emptyStateHTML;
 
     return `
+        <!-- KPIs DE RESUMO FINANCEIRO - PRIMEIRO NA PÁGINA -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <div class="bg-gradient-to-br from-green-500 to-emerald-600 p-6 rounded-2xl shadow-lg text-white flex justify-between items-center transition-all hover:scale-[1.02]">
+                <div>
+                    <p class="text-sm text-green-100 font-medium flex items-center gap-1">
+                        <i data-lucide="arrow-down-left" class="w-4 h-4"></i> Entradas (Período)
+                    </p>
+                    <h2 class="text-3xl font-bold ${sensClass}">${formatCurrency(currentStats.entradas)}</h2>
+                    <div class="flex items-center gap-1 mt-2 text-xs ${varEntradas >= 0 ? 'text-green-200' : 'text-red-200'}">
+                        <i data-lucide="${varEntradas >= 0 ? 'trending-up' : 'trending-down'}" class="w-3 h-3"></i>
+                        ${Math.abs(varEntradas).toFixed(1)}% vs anterior
+                    </div>
+                </div>
+                <div class="bg-white/20 p-4 rounded-xl">
+                    <i data-lucide="trending-up" class="w-8 h-8"></i>
+                </div>
+            </div>
+            
+            <div class="bg-gradient-to-br from-red-500 to-rose-600 p-6 rounded-2xl shadow-lg text-white flex justify-between items-center transition-all hover:scale-[1.02]">
+                <div>
+                    <p class="text-sm text-red-100 font-medium flex items-center gap-1">
+                        <i data-lucide="arrow-up-right" class="w-4 h-4"></i> Saídas (Período)
+                    </p>
+                    <h2 class="text-3xl font-bold ${sensClass}">${formatCurrency(currentStats.saidas)}</h2>
+                    <div class="flex items-center gap-1 mt-2 text-xs ${varSaidas <= 0 ? 'text-green-200' : 'text-red-200'}">
+                        <i data-lucide="${varSaidas <= 0 ? 'trending-down' : 'trending-up'}" class="w-3 h-3"></i>
+                        ${Math.abs(varSaidas).toFixed(1)}% vs anterior
+                    </div>
+                </div>
+                <div class="bg-white/20 p-4 rounded-xl">
+                    <i data-lucide="trending-down" class="w-8 h-8"></i>
+                </div>
+            </div>
+            
+            <div class="bg-gradient-to-br ${currentStats.saldo >= 0 ? 'from-blue-500 to-indigo-600' : 'from-orange-500 to-red-600'} p-6 rounded-2xl shadow-lg text-white flex justify-between items-center transition-all hover:scale-[1.02]">
+                <div>
+                    <p class="text-sm ${currentStats.saldo >= 0 ? 'text-blue-100' : 'text-orange-100'} font-medium flex items-center gap-1">
+                        <i data-lucide="wallet" class="w-4 h-4"></i> Resultado Líquido
+                    </p>
+                    <h2 class="text-3xl font-bold ${sensClass}">${formatCurrency(currentStats.saldo)}</h2>
+                    <div class="flex items-center gap-1 mt-2 text-xs ${varSaldo >= 0 ? 'text-green-200' : 'text-red-200'}">
+                        <i data-lucide="${varSaldo >= 0 ? 'trending-up' : 'trending-down'}" class="w-3 h-3"></i>
+                        ${Math.abs(varSaldo).toFixed(1)}% vs anterior
+                    </div>
+                </div>
+                <div class="bg-white/20 p-4 rounded-xl">
+                    <i data-lucide="${currentStats.saldo >= 0 ? 'piggy-bank' : 'alert-triangle'}" class="w-8 h-8"></i>
+                </div>
+            </div>
+        </div>
+
+        <!-- SCORE DE SAÚDE FINANCEIRA -->
         <div class="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-2xl shadow-lg p-6 text-white relative overflow-hidden transition-all hover:scale-[1.01]">
             <div class="flex justify-between items-start mb-4 relative z-10">
                 <div>
@@ -638,50 +690,6 @@ function renderCashFlowDashboard(currentStats, lastStats, currentTxs, health, in
                 Fluxo de Caixa Projetado (30 Dias)
             </h3>
             <div class="h-64"><canvas id="chartProjection"></canvas></div>
-        </div>
-        
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div class="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 flex justify-between items-center transition-all hover:shadow-lg">
-                <div>
-                    <p class="text-sm text-slate-500 dark:text-slate-400 font-medium">Entradas (Período)</p>
-                    <h2 class="text-2xl font-bold text-green-600 dark:text-green-400 ${sensClass}">${formatCurrency(currentStats.entradas)}</h2>
-                    <div class="flex items-center gap-1 mt-1 text-xs ${varEntradas >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400'}">
-                        <i data-lucide="${varEntradas >= 0 ? 'arrow-up-right' : 'arrow-down-right'}" class="w-3 h-3"></i>
-                        ${Math.abs(varEntradas).toFixed(1)}% vs anterior
-                    </div>
-                </div>
-                <div class="bg-green-100 dark:bg-green-900 p-3 rounded-lg text-green-600 dark:text-green-400">
-                    <i data-lucide="trending-up"></i>
-                </div>
-            </div>
-            
-            <div class="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 flex justify-between items-center transition-all hover:shadow-lg">
-                <div>
-                    <p class="text-sm text-slate-500 dark:text-slate-400 font-medium">Saídas (Período)</p>
-                    <h2 class="text-2xl font-bold text-red-600 dark:text-red-400 ${sensClass}">${formatCurrency(currentStats.saidas)}</h2>
-                    <div class="flex items-center gap-1 mt-1 text-xs ${varSaidas <= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400'}">
-                        <i data-lucide="${varSaidas <= 0 ? 'arrow-down-right' : 'arrow-up-right'}" class="w-3 h-3"></i>
-                        ${Math.abs(varSaidas).toFixed(1)}% vs anterior
-                    </div>
-                </div>
-                <div class="bg-red-100 dark:bg-red-900 p-3 rounded-lg text-red-600 dark:text-red-400">
-                    <i data-lucide="trending-down"></i>
-                </div>
-            </div>
-            
-            <div class="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 flex justify-between items-center transition-all hover:shadow-lg">
-                <div>
-                    <p class="text-sm text-slate-500 dark:text-slate-400 font-medium">Saldo Líquido</p>
-                    <h2 class="text-2xl font-bold ${currentStats.saldo >= 0 ? 'text-blue-600 dark:text-blue-400' : 'text-red-600 dark:text-red-400'} ${sensClass}">${formatCurrency(currentStats.saldo)}</h2>
-                    <div class="flex items-center gap-1 mt-1 text-xs ${varSaldo >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400'}">
-                        <i data-lucide="${varSaldo >= 0 ? 'arrow-up-right' : 'arrow-down-right'}" class="w-3 h-3"></i>
-                        ${Math.abs(varSaldo).toFixed(1)}% vs anterior
-                    </div>
-                </div>
-                <div class="bg-blue-100 dark:bg-blue-900 p-3 rounded-lg text-blue-600 dark:text-blue-400">
-                    <i data-lucide="wallet"></i>
-                </div>
-            </div>
         </div>
 
         <div class="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 transition-all hover:shadow-lg">
