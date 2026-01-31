@@ -160,20 +160,18 @@ function askAIFinancialQuestion(question, contextData) {
       return usageCheck.message;
     }
     
-    // Busca API key
-    var data = configSheet.getRange('A:B').getValues();
-    var apiKey = null;
+    // Busca API key - primeiro da planilha do cliente
+    var apiKey = getAPIKey(ss);
     
-    for (var i = 0; i < data.length; i++) {
-      var key = String(data[i][0]).toLowerCase().trim();
-      if (key.indexOf('ai_api_key') > -1 || key.indexOf('api_key') > -1) {
-        apiKey = data[i][1];
-        break;
-      }
+    // Se não encontrou, tenta da CONFIG_GLOBAL na ADMIN_MASTER
+    if (!apiKey && typeof AdminService !== 'undefined' && AdminService.isMultiClientMode()) {
+      apiKey = AdminService.getGlobalConfig('openai_api_key');
+      Logger.log('[AI Chat] API Key buscada da ADMIN_MASTER: ' + (apiKey ? 'Encontrada' : 'Não encontrada'));
     }
     
-    if (!apiKey) {
-      return 'Recurso de IA nao configurado. Entre em contato com seu consultor para ativar.';
+    if (!apiKey || String(apiKey).trim() === '') {
+      Logger.log('[AI Chat] API Key não configurada');
+      return 'Recurso de IA nao configurado. Para ativar:\n\n1. Adicione a chave "ai_api_key" na aba CONFIG da sua planilha\n2. Ou solicite ao administrador para configurar na planilha ADMIN_MASTER (aba CONFIG_GLOBAL)\n\nEntre em contato com seu consultor para obter uma API key valida.';
     }
     
     // Filtra transacoes pelo periodo atual
