@@ -270,6 +270,38 @@ var AdminService = {
       Logger.log('[Admin] Erro ao criar cliente: ' + e.message);
       return { error: e.message };
     }
+  },
+  
+  // NOVO: Obtém lista de emails da equipe interna (staff)
+  getStaffEmails: function() {
+    if (!this.isMultiClientMode()) return [];
+    
+    try {
+      var ss = SpreadsheetApp.openById(this.ADMIN_SPREADSHEET_ID);
+      var sheet = ss.getSheetByName('CONFIG_GLOBAL');
+      
+      if (!sheet) return [];
+      
+      var data = sheet.getDataRange().getValues();
+      
+      for (var i = 0; i < data.length; i++) {
+        var key = String(data[i][0]).toLowerCase().trim();
+        if (key === 'emails_equipe' || key === 'staff_emails' || key === 'equipe_emails') {
+          var emailsStr = String(data[i][1]);
+          if (emailsStr) {
+            return emailsStr.toLowerCase().split(',').map(function(e) {
+              return e.trim();
+            });
+          }
+        }
+      }
+      
+      return [];
+      
+    } catch (e) {
+      Logger.log('[Admin] Erro ao buscar emails da equipe: ' + e.message);
+      return [];
+    }
   }
 };
 
