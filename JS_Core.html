@@ -62,6 +62,26 @@ let ADVANCED_FILTERS = {
             return new Date(dateStr).toLocaleDateString('pt-BR');
         } catch(e) { return dateStr; }
     };
+    
+    // Formata data para pt-BR (aceita Date ou string YYYY-MM-DD)
+    const formatDateBR = (date) => {
+        if (!date) return "-";
+        try {
+            if (date instanceof Date) {
+                return date.toLocaleDateString('pt-BR');
+            }
+            // Se for string no formato YYYY-MM-DD
+            if (typeof date === 'string' && date.includes('-')) {
+                const parts = date.split('-');
+                if (parts.length === 3) {
+                    return new Date(parts[0], parts[1] - 1, parts[2]).toLocaleDateString('pt-BR');
+                }
+            }
+            return new Date(date).toLocaleDateString('pt-BR');
+        } catch (e) {
+            return String(date);
+        }
+    };
 
     function showToast(message, type = 'info', duration = 3000) {
         const toast = document.createElement('div');
