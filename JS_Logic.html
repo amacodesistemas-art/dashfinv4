@@ -122,12 +122,18 @@
     }
 
     // Fluxo de Caixa Projetado (30 dias)
+    // CORRIGIDO: Usa o patrimônio total (saldo atual dos bancos) como ponto de partida
     function getCashFlowProjection(txs, currentBalance) {
         const today = new Date();
         today.setHours(0,0,0,0);
         
+        // Usa o patrimônio total calculado dinamicamente
+        const patrimonioAtual = GLOBAL_DATA.patrimonioTotal || 
+                                GLOBAL_DATA.banks.reduce((sum, b) => sum + (b.balance || 0), 0) ||
+                                currentBalance;
+        
         const projection = [];
-        let projectionBalance = currentBalance;
+        let projectionBalance = patrimonioAtual;
         
         for(let i=0; i<30; i++) {
             const d = new Date(today); 
