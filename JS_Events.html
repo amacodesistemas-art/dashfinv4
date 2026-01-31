@@ -39,6 +39,7 @@
         if (text) text.textContent = 'Atualizando...';
         if (btn) btn.disabled = true;
         
+        // IMPORTANTE: Força o backend a limpar o cache antes de buscar novos dados
         google.script.run
             .withSuccessHandler(function(jsonTexto) {
                 try {
@@ -46,8 +47,31 @@
                     if (GLOBAL_DATA.lastUpdate) {
                         LAST_UPDATE_TIME = new Date(GLOBAL_DATA.lastUpdate);
                     }
+                    
+                    // LIMPA VARIÁVEIS LOCAIS PARA EVITAR DADOS FANTASMAS
+                    CURRENT_PAGE = 1;
+                    TRANSACTION_SEARCH_QUERY = '';
+                    ADVANCED_FILTERS = {
+                        category: '',
+                        type: '',
+                        costCenter: '',
+                        status: '',
+                        minValue: null,
+                        maxValue: null
+                    };
+                    
+                    // Destroi instâncias de gráficos para evitar dados antigos
+                    if (CHARTS_INSTANCES) {
+                        Object.values(CHARTS_INSTANCES).forEach(chart => {
+                            if (chart && typeof chart.destroy === 'function') {
+                                chart.destroy();
+                            }
+                        });
+                        CHARTS_INSTANCES = {};
+                    }
+                    
                     renderApp();
-                    showToast('✓ Dados atualizados com sucesso!', 'success');
+                    showToast('✓ Dados atualizados com sucesso! Cache limpo.', 'success');
                 } catch (e) { 
                     showToast('✗ Erro ao processar dados: ' + e.message, 'error'); 
                 } finally {
@@ -64,7 +88,7 @@
                 if (text) text.textContent = 'Atualizar';
                 if (btn) btn.disabled = false;
             })
-            .refreshData(); // Certifique-se que essa função existe no seu Code.gs
+            .refreshData(); // Chama a função que força refresh do cache
     }
 
     // --- NAVEGAÇÃO ---
