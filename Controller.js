@@ -13,6 +13,10 @@ function getClientData(forceRefresh) {
         Logger.log('✓ Usando dados em cache');
         return cachedData;
       }
+    } else {
+      // Se for refresh forçado, LIMPA o cache primeiro
+      Logger.log('🗑️ Limpando cache antes do refresh...');
+      CacheManager.remove(cacheConf.key);
     }
     
     // 2. Se não tem cache, busca dados frescos (Chama o DataService)
@@ -37,9 +41,15 @@ function getClientData(forceRefresh) {
   }
 }
 
-// Chamado pelo botão "Atualizar" do Dashboard
+// Chamado pelo botão "Atualizar" do Dashboard - FORÇA limpeza de cache
 function refreshData() {
-  Logger.log('🔄 Refresh forçado pelo usuário');
+  Logger.log('🔄 Refresh forçado pelo usuário - Limpando cache...');
+  
+  // Limpa o cache antes de buscar novos dados
+  const cacheConf = getCacheConfig();
+  CacheManager.remove(cacheConf.key);
+  
+  // Busca dados frescos
   return getClientData(true);
 }
 
