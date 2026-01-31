@@ -29,7 +29,8 @@ const DataService = {
         ai_insights: false,
         alerts: false,
         predictive_analytics: false,
-        whatsapp_reports: false
+        whatsapp_reports: false,
+        import_enabled: false // Cliente não pode importar
       }
     },
     'professional': {
@@ -49,7 +50,8 @@ const DataService = {
         ai_insights: true,
         alerts: false,
         predictive_analytics: false,
-        whatsapp_reports: false
+        whatsapp_reports: false,
+        import_enabled: false // Cliente não pode importar
       }
     },
     'enterprise': {
@@ -72,7 +74,8 @@ const DataService = {
         whatsapp_reports: true,
         priority_support: true,
         custom_reports: true,
-        benchmarks: true
+        benchmarks: true,
+        import_enabled: false // Cliente não pode importar
       }
     },
     // Aliases para compatibilidade com versões anteriores
@@ -83,7 +86,8 @@ const DataService = {
       features: {
         dashboard: true, filters: true, export_csv: true, export_pdf: true,
         charts: true, goals: true, accounts: true, insights_basic: true,
-        dre: true, ai_insights: true, alerts: false, predictive_analytics: false
+        dre: true, ai_insights: true, alerts: false, predictive_analytics: false,
+        import_enabled: false
       }
     },
     'advanced': {
@@ -94,7 +98,22 @@ const DataService = {
         dashboard: true, filters: true, export_csv: true, export_pdf: true,
         charts: true, goals: true, accounts: true, insights_basic: true,
         dre: true, ai_insights: true, alerts: true, predictive_analytics: true,
-        whatsapp_reports: true, priority_support: true
+        whatsapp_reports: true, priority_support: true,
+        import_enabled: false
+      }
+    },
+    // NOVO: Plano especial para uso interno da equipe/consultoria
+    'admin': {
+      name: 'Administrador',
+      price: 'Interno',
+      ai_queries_limit: -1,
+      features: {
+        dashboard: true, filters: true, export_csv: true, export_pdf: true,
+        charts: true, goals: true, accounts: true, insights_basic: true,
+        dre: true, ai_insights: true, alerts: true, predictive_analytics: true,
+        whatsapp_reports: true, priority_support: true, custom_reports: true,
+        benchmarks: true,
+        import_enabled: true // Apenas admin pode importar
       }
     }
   },
