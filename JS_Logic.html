@@ -184,18 +184,55 @@ function getLast12MonthsData() {
         const objetivos = [];
 
         GLOBAL_DATA.goals.forEach(meta => {
+            // Normaliza o tipo da meta para comparação case-insensitive
+            const tipoMeta = (meta.tipo || 'Gasto').toLowerCase().trim();
+            
+            // Determina se é meta de receita/objetivo ou de gasto
+            // Tipos que indicam OBJETIVO/RECEITA: 'receita', 'objetivo', 'entrada', 'sonho'
+            // Tipos que indicam GASTO/LIMITE: 'gasto', 'saída', 'saida', 'despesa', 'limite'
+            const isObjetivo = ['receita', 'objetivo', 'entrada', 'sonho', 'meta_receita'].includes(tipoMeta);
+            
+            // Filtra transações pelo tipo correto
+            // - Objetivos/Receitas: soma ENTRADAS
+            // - Gastos/Limites: soma SAÍDAS
+            const tipoTransacao = isObjetivo ? 'Entrada' : 'Saída';
+            
             const valorAtual = currentTxs
-                .filter(t => t.category === meta.categoria && t.type === 'Saída')
+                .filter(t => t.category === meta.categoria && t.type === tipoTransacao)
                 .reduce((s, t) => s + t.value, 0);
 
-            const percent = (valorAtual / meta.meta) * 100;
+            const percent = meta.meta > 0 ? (valorAtual / meta.meta) * 100 : 0;
+            
+            // Lógica de status diferente para gastos vs objetivos
             let status = 'success';
-            if (percent > 100) status = 'danger'; else if (percent > 80) status = 'warning';
+            if (isObjetivo) {
+                // Para OBJETIVOS: quanto mais próximo de 100%, melhor!
+                if (percent >= 100) status = 'success';      // Alcançou o objetivo!
+                else if (percent >= 80) status = 'warning';  // Quase lá
+                else status = 'info';                        // Em progresso
+            } else {
+                // Para GASTOS: ultrapassar 100% é ruim
+                if (percent > 100) status = 'danger';        // Estourou o limite
+                else if (percent > 80) status = 'warning';   // Próximo do limite
+                else status = 'success';                     // Dentro da meta
+            }
 
-            const item = { categoria: meta.categoria, meta: meta.meta, atual: valorAtual, restante: meta.meta - valorAtual, percent: percent, status: status };
+            const item = { 
+                categoria: meta.categoria, 
+                meta: meta.meta, 
+                atual: valorAtual, 
+                restante: meta.meta - valorAtual, 
+                percent: percent, 
+                status: status,
+                isObjetivo: isObjetivo
+            };
 
-            if (meta.tipo === 'Objetivo') objetivos.push(item);
-            else gastos.push(item);
+            // Separa em arrays corretos
+            if (isObjetivo) {
+                objetivos.push(item);
+            } else {
+                gastos.push(item);
+            }
         });
 
         return { gastos, objetivos };
