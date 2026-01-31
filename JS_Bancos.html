@@ -296,6 +296,7 @@ function openBankDetail(bankId) {
     const banks = GLOBAL_DATA.banks || [];
     const transactions = GLOBAL_DATA.transactions || [];
     const accounts = GLOBAL_DATA.accounts || [];
+    const blurClass = getBlurClass();
     
     const bank = banks.find(b => String(b.id) === String(bankId));
     if (!bank) return;
