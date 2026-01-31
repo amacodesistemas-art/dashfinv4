@@ -101,6 +101,18 @@ let ADVANCED_FILTERS = {
     function getBlurClass() {
         return IS_PRIVACY_MODE ? 'blur-content' : '';
     }
+    
+    // Verifica se transação está PAGA/CONCLUÍDA/RECEBIDA (CASE INSENSITIVE - GLOBAL)
+    function isTransactionPaid(t) {
+        if (!t || !t.status) return false;
+        const status = t.status.toLowerCase().trim();
+        return status === 'pago' || status === 'concluído' || status === 'concluido' || status === 'recebido';
+    }
+    
+    // Verifica se transação está PENDENTE (não paga - CASE INSENSITIVE - GLOBAL)
+    function isTransactionPending(t) {
+        return !isTransactionPaid(t);
+    }
 
     function showToast(message, type = 'info', duration = 3000) {
         const toast = document.createElement('div');
