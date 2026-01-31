@@ -10,7 +10,7 @@ Configurações do cliente.
 | Plano | professional |
 | Nome | Nome da Empresa |
 | CNPJ | 00.000.000/0001-00 |
-| AI_API_KEY | sk-xxxxxxx (opcional) |
+| AI_API_KEY | sk-xxxxxxx (opcional - pode usar da ADMIN_MASTER) |
 
 ### 2. CONTAS
 Contas bancárias e caixas.
@@ -51,8 +51,16 @@ Metas e objetivos financeiros.
 | Marketing | 5000 | Gasto |
 | Vendas | 50000 | Receita |
 | Fornecedores | 15000 | Gasto |
+| EMPRESA CLIENTE | 10000 | Receita |
 
-**Tipos**: `Gasto` (limite), `Receita` (objetivo)
+**Tipos de Meta**:
+
+| Tipo | Descrição | Transações Consideradas | Comportamento |
+|------|-----------|------------------------|---------------|
+| `Gasto`, `Saída`, `Despesa`, `Limite` | Limite de gastos | Saídas | > 100% = Estourou (vermelho) |
+| `Receita`, `Objetivo`, `Entrada`, `Sonho` | Meta de receita | Entradas | 100% = Alcançou (verde) |
+
+> **IMPORTANTE**: Todos os tipos são case-insensitive (funciona `gasto`, `Gasto`, `GASTO`, etc.)
 
 ---
 
