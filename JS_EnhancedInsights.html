@@ -57,7 +57,9 @@ function generateEnhancedInsights(currentStats, lastStats, currentTxs, allTxs) {
   }
   
   // 4. Runway (Pista de Pouso - Meses até zerar)
-  const totalPatrimonio = GLOBAL_DATA.accounts.reduce((s, a) => s + a.balance, 0);
+  // CORRIGIDO: Usa patrimônio total dos BANCOS (calculado dinamicamente)
+  const totalPatrimonio = GLOBAL_DATA.patrimonioTotal || 
+                          GLOBAL_DATA.banks.reduce((s, b) => s + (b.balance || 0), 0);
   if (totalPatrimonio > 0 && currentStats.saldo < 0) {
     const monthlyDeficit = Math.abs(currentStats.saldo);
     const monthsRemaining = totalPatrimonio / monthlyDeficit;
