@@ -6,37 +6,49 @@
 const ONBOARDING_STEPS = [
   {
     title: '🎉 Bem-vindo ao Dashboard Financeiro!',
-    description: 'Este é seu painel gerencial B2B completo. Vamos fazer um tour rápido pelas funcionalidades principais.',
+    description: 'Este é seu painel gerencial B2B completo. Aqui você acompanha a saúde financeira da sua empresa em tempo real. Vamos fazer um tour rápido pelas funcionalidades principais.',
     target: null,
     position: 'center'
   },
   {
-    title: '📊 Visão Geral',
-    description: 'Aqui você encontra seus KPIs principais: entradas, saídas, saldo e score de saúde financeira. Use os filtros de período para analisar diferentes janelas de tempo.',
+    title: '📊 Score de Saúde Financeira',
+    description: 'No topo você encontra o Score de Saúde Financeira (0-100), que avalia sua situação atual considerando saldo, taxa de poupança e patrimônio acumulado. Acompanhe também seus KPIs: receitas, despesas e saldo líquido.',
     target: '.bg-gradient-to-r',
     position: 'bottom'
   },
   {
     title: '💰 Contas a Pagar e Receber',
-    description: 'Clique nos cards para filtrar rapidamente transações pendentes. O sistema destaca automaticamente valores em atraso.',
+    description: 'Os cards de A Receber e A Pagar mostram suas obrigações pendentes. <strong>Clique neles para filtrar</strong> automaticamente as transações relacionadas. Valores em atraso são destacados em vermelho.',
     target: '.cursor-pointer',
     position: 'bottom'
   },
   {
+    title: '📅 Filtros de Período',
+    description: 'Use o seletor de período para analisar diferentes janelas de tempo: semana atual, mês, trimestre, ano ou período personalizado. Todos os dados e gráficos se atualizam automaticamente.',
+    target: 'select',
+    position: 'bottom'
+  },
+  {
     title: '🔍 Filtros Avançados',
-    description: 'Use a busca inteligente e filtros para encontrar exatamente o que procura. Você pode filtrar por categoria, tipo, status, centro de custo e muito mais.',
+    description: 'A busca inteligente permite filtrar por descrição, categoria, tipo (Entrada/Saída), status de pagamento e centro de custo. Combine múltiplos filtros para análises detalhadas.',
     target: '#transactionSearch',
     position: 'bottom'
   },
   {
+    title: '📈 Gráficos e Análises',
+    description: 'Visualize a evolução dos últimos 12 meses, projeção de fluxo de caixa para 30 dias e distribuição de gastos por categoria. Os insights inteligentes destacam pontos de atenção.',
+    target: null,
+    position: 'center'
+  },
+  {
     title: '⌨️ Atalhos de Teclado',
-    description: '<strong>Ctrl+K</strong>: Buscar<br><strong>Ctrl+R</strong>: Atualizar dados<br><strong>D</strong>: Modo escuro<br><strong>P</strong>: Modo privacidade<br><strong>Setas</strong>: Navegar páginas',
+    description: '<strong>Ctrl+K</strong>: Buscar<br><strong>Ctrl+R</strong>: Atualizar dados<br><strong>D</strong>: Modo escuro/claro<br><strong>P</strong>: Modo privacidade (oculta valores)<br><strong>← →</strong>: Navegar páginas<br><strong>?</strong>: Ver atalhos',
     target: null,
     position: 'center'
   },
   {
     title: '✨ Pronto para começar!',
-    description: 'Explore o dashboard e descubra todas as funcionalidades. Seus dados estão sincronizados com o Google Sheets e atualizados automaticamente.',
+    description: 'Explore o dashboard e descubra todas as funcionalidades. Seus dados estão sincronizados com o Google Sheets e são atualizados automaticamente. Qualquer dúvida, entre em contato com sua consultoria!',
     target: null,
     position: 'center'
   }
