@@ -105,8 +105,6 @@ let ADVANCED_FILTERS = {
         }
         return IS_PRIVACY_MODE ? 'blur-content' : '';
     }
-    // Expõe globalmente
-    window.getBlurClass = getBlurClass;
     
     // Verifica se transação está PAGA/CONCLUÍDA/RECEBIDA (CASE INSENSITIVE - GLOBAL)
     function isTransactionPaid(t) {
