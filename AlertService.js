@@ -66,11 +66,20 @@ var AlertService = {
   },
   
   // 1. Verifica projeção de fluxo de caixa
-  checkCashFlowProjection: function(transactions, accounts) {
+  // CORRIGIDO: Usa patrimônio total dos BANCOS (calculado dinamicamente)
+  checkCashFlowProjection: function(transactions, accounts, banks) {
+    // Usa o saldo total dos BANCOS ao invés das contas
     var totalBalance = 0;
-    accounts.forEach(function(acc) {
-      totalBalance += acc.balance || 0;
-    });
+    if (banks && banks.length > 0) {
+      banks.forEach(function(bank) {
+        totalBalance += bank.balance || 0;
+      });
+    } else {
+      // Fallback para contas se não tiver bancos
+      accounts.forEach(function(acc) {
+        totalBalance += acc.balance || 0;
+      });
+    }
     
     var today = new Date();
     var projection = totalBalance;
