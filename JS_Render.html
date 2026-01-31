@@ -7,7 +7,9 @@
     // 1. HEADER E BARRA SUPERIOR
     // ----------------------------------------------------------
     function renderHeader(title, subtitle = '') {
-        const totalPatrimonio = GLOBAL_DATA.accounts.reduce((s, a) => s + a.balance, 0);
+        // Usa o patrimônio calculado dinamicamente (soma dos saldos dos bancos)
+        const totalPatrimonio = GLOBAL_DATA.patrimonioTotal || 
+                                GLOBAL_DATA.banks.reduce((s, b) => s + (b.balance || 0), 0);
         const sensClass = IS_PRIVACY_MODE ? 'sensitive-data blur-content' : 'sensitive-data';
         
         // Verifica se está online (via google.script)
@@ -34,7 +36,7 @@
                         <i data-lucide="file-text" class="w-4 h-4"></i> PDF
                     </button>
                     <div class="text-right border-l pl-4 border-slate-200 dark:border-slate-600">
-                        <p class="text-xs text-slate-400 font-bold uppercase">Patrimônio</p>
+                        <p class="text-xs text-slate-400 font-bold uppercase">Patrimônio Total</p>
                         <p class="text-2xl md:text-3xl font-bold text-slate-800 dark:text-white transition-all hover:scale-105 ${sensClass}">${formatCurrency(totalPatrimonio)}</p>
                         <p id="last-update-text" class="text-[10px] text-slate-400 mt-0.5">Atualizado: ${getTimeSinceUpdate()}</p>
                     </div>
