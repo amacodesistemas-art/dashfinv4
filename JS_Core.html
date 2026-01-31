@@ -82,6 +82,11 @@ let ADVANCED_FILTERS = {
             return String(date);
         }
     };
+    
+    // Retorna classe de blur para modo privacidade (GLOBAL)
+    function getBlurClass() {
+        return IS_PRIVACY_MODE ? 'blur-content' : '';
+    }
 
     function showToast(message, type = 'info', duration = 3000) {
         const toast = document.createElement('div');
