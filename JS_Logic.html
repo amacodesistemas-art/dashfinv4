@@ -25,8 +25,14 @@
     }
 
     // Calcula Score de Saúde Financeira
+    // CORRIGIDO: Usa o patrimônio total dos bancos (calculado dinamicamente)
     function calculateFinancialHealth(currentStats, totalPatrimonio) {
         let score = 0;
+        
+        // Usa o patrimônio calculado dinamicamente dos bancos
+        const patrimonioReal = GLOBAL_DATA.patrimonioTotal || 
+                              GLOBAL_DATA.banks.reduce((sum, b) => sum + (b.balance || 0), 0) ||
+                              totalPatrimonio;
         
         // Critério 1: Saldo Positivo (40 pts)
         const saldoNaoNegativo = currentStats.saldo >= 0;
@@ -42,14 +48,14 @@
         else if (taxaRaw > 0) { score += 5; poupancaScore = 5; }
 
         // Critério 3: Patrimônio (30 pts)
-        const temPatrimonio = totalPatrimonio > 0;
+        const temPatrimonio = patrimonioReal > 0;
         if (temPatrimonio) score += 30;
 
         let statusSaldo = currentStats.saldo > 0 ? "Positivo" : (currentStats.saldo === 0 ? "Neutro" : "Negativo");
 
         return { 
             score, 
-            details: { isGreen: saldoNaoNegativo, statusLabel: statusSaldo, taxaPercent, poupancaScore, temPatrimonio }
+            details: { isGreen: saldoNaoNegativo, statusLabel: statusSaldo, taxaPercent, poupancaScore, temPatrimonio, patrimonioTotal: patrimonioReal }
         };
     }
 
