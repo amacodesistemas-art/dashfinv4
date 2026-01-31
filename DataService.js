@@ -269,20 +269,71 @@ const DataService = {
     const transactions = this.readTransactions(ss, accounts, banks, dreMapping);
     const goals = this.readGoals(ss);
     
-    // Calcula o balance de cada conta baseado nas transações
+    // ====================================================
+    // CÁLCULO DINÂMICO DO SALDO DAS CONTAS (CONTAS/PROJETOS)
+    // ====================================================
+    // O balance inicial da planilha é o SALDO INICIAL.
+    // O saldo atual = saldo inicial + entradas - saídas (apenas transações PAGAS/CONCLUÍDAS)
     accounts.forEach(function(account) {
-      var balance = 0;
+      var saldoInicial = account.balanceInicial || 0;
+      var movimentacoes = 0;
+      
       transactions.forEach(function(tx) {
         // Verifica se a transação pertence a esta conta
-        if (tx.accountId === account.id || tx.account === account.name || tx.category === account.name) {
+        var pertenceAConta = (String(tx.accountId) === String(account.id) || 
+                             tx.account === account.name || 
+                             tx.category === account.name);
+        
+        if (pertenceAConta) {
+          // Considera TODAS as transações (não apenas pagas) para o saldo corrente
+          // Se quiser apenas pagas, adicione: && isPaid(tx.status)
           if (tx.type === 'Entrada') {
-            balance += tx.value;
-          } else {
-            balance -= tx.value;
+            movimentacoes += tx.value;
+          } else if (tx.type === 'Saída') {
+            movimentacoes -= tx.value;
           }
         }
       });
-      account.balance = balance;
+      
+      account.balanceInicial = saldoInicial;
+      account.movimentacoes = movimentacoes;
+      account.balance = saldoInicial + movimentacoes;
+    });
+    
+    // ====================================================
+    // CÁLCULO DINÂMICO DO SALDO DOS BANCOS
+    // ====================================================
+    // Saldo do banco = saldo inicial (da planilha) + entradas - saídas do banco
+    banks.forEach(function(bank) {
+      var saldoInicial = bank.balanceInicial || 0;
+      var movimentacoes = 0;
+      
+      transactions.forEach(function(tx) {
+        // Verifica se a transação pertence a este banco
+        var pertenceAoBanco = (String(tx.bankId) === String(bank.id) || 
+                              tx.bank === bank.name);
+        
+        if (pertenceAoBanco) {
+          // Considera apenas transações PAGAS para o saldo real do banco
+          var isPago = tx.status && 
+                       (tx.status.toLowerCase() === 'pago' || 
+                        tx.status.toLowerCase() === 'concluído' || 
+                        tx.status.toLowerCase() === 'concluido' ||
+                        tx.status.toLowerCase() === 'recebido');
+          
+          if (isPago) {
+            if (tx.type === 'Entrada') {
+              movimentacoes += tx.value;
+            } else if (tx.type === 'Saída') {
+              movimentacoes -= tx.value;
+            }
+          }
+        }
+      });
+      
+      bank.balanceInicial = saldoInicial;
+      bank.movimentacoes = movimentacoes;
+      bank.balance = saldoInicial + movimentacoes;
     });
     
     // Obtem informações do plano
@@ -312,12 +363,18 @@ const DataService = {
       goals: goals
     });
     
+    // Calcula o patrimônio total (saldo de todos os bancos)
+    const patrimonioTotal = banks.reduce(function(total, bank) {
+      return total + (bank.balance || 0);
+    }, 0);
+    
     return {
       config: config,
       accounts: accounts,
       banks: banks,
       transactions: transactions,
       goals: goals,
+      patrimonioTotal: patrimonioTotal,
       lastUpdate: new Date().toISOString(),
       validation: validation,
       plan: planInfo,
