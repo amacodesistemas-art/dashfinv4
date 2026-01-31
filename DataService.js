@@ -211,6 +211,50 @@ const DataService = {
     };
   },
   
+  // NOVO: Verifica se o usuário atual é da equipe interna
+  isStaffUser: function(config) {
+    try {
+      // Obtém email do usuário logado
+      const currentUser = Session.getActiveUser().getEmail();
+      
+      if (!currentUser) {
+        Logger.log('[Staff] Não foi possível obter email do usuário');
+        return false;
+      }
+      
+      Logger.log('[Staff] Usuário atual: ' + currentUser);
+      
+      // Verifica na lista de emails da equipe (do CONFIG da planilha)
+      if (config.emails_equipe) {
+        const staffEmails = String(config.emails_equipe)
+          .toLowerCase()
+          .split(',')
+          .map(e => e.trim());
+        
+        if (staffEmails.includes(currentUser.toLowerCase())) {
+          Logger.log('[Staff] Usuário é da equipe (via CONFIG)');
+          return true;
+        }
+      }
+      
+      // Verifica na ADMIN_MASTER se estiver em modo multi-cliente
+      if (typeof AdminService !== 'undefined' && AdminService.isMultiClientMode()) {
+        const adminEmails = AdminService.getStaffEmails();
+        if (adminEmails && adminEmails.includes(currentUser.toLowerCase())) {
+          Logger.log('[Staff] Usuário é da equipe (via ADMIN_MASTER)');
+          return true;
+        }
+      }
+      
+      Logger.log('[Staff] Usuário NÃO é da equipe');
+      return false;
+      
+    } catch (error) {
+      Logger.log('[Staff] Erro ao verificar equipe: ' + error.message);
+      return false;
+    }
+  },
+  
   fetchAllData: function() {
     const ss = SpreadsheetApp.openById(getSpreadsheetId());
     
@@ -242,8 +286,23 @@ const DataService = {
     });
     
     // Obtem informações do plano
-    const planInfo = this.getPlanInfo(clientPlan);
+    let planInfo = this.getPlanInfo(clientPlan);
     Logger.log('[DataService] Plan Info: ' + JSON.stringify(planInfo));
+    
+    // NOVO: Se usuário é da equipe, habilita funcionalidades de admin
+    const isStaff = this.isStaffUser(config);
+    if (isStaff) {
+      Logger.log('[DataService] Usuário é STAFF - habilitando import_enabled');
+      // Cria cópia das features e habilita importação
+      planInfo = {
+        ...planInfo,
+        features: {
+          ...planInfo.features,
+          import_enabled: true
+        },
+        isStaff: true
+      };
+    }
     
     // Validação de dados
     const validation = this.validateData({
@@ -261,7 +320,8 @@ const DataService = {
       goals: goals,
       lastUpdate: new Date().toISOString(),
       validation: validation,
-      plan: planInfo
+      plan: planInfo,
+      isStaff: isStaff
     };
   },
   
