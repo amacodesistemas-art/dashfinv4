@@ -87,7 +87,16 @@ function checkAIUsageLimit(ss, configSheet) {
     return { allowed: false, message: 'Plano nao identificado.' };
   }
   
+  // Tenta buscar limite personalizado da CONFIG_GLOBAL na ADMIN_MASTER
   var limit = planConfig.ai_queries_limit;
+  
+  if (typeof AdminService !== 'undefined' && AdminService.isMultiClientMode()) {
+    var customLimit = AdminService.getGlobalConfig('limite_ia_' + clientPlan);
+    if (customLimit !== null && !isNaN(parseInt(customLimit))) {
+      limit = parseInt(customLimit);
+      Logger.log('[AI Limit] Limite customizado da ADMIN_MASTER para ' + clientPlan + ': ' + limit);
+    }
+  }
   
   // Se limite é 0, não tem acesso
   if (limit === 0) {
