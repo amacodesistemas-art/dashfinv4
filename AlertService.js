@@ -135,7 +135,12 @@ var AlertService = {
     var oldestOverdue = null;
     
     transactions.forEach(function(t) {
-      if (t.type === 'Entrada' && t.status !== 'Pago' && t.status !== 'Recebido' && t.status !== 'Concluído') {
+      // Verificação CASE INSENSITIVE
+      var status = (t.status || '').toLowerCase().trim();
+      var type = (t.type || '').toLowerCase().trim();
+      var isPending = status !== 'pago' && status !== 'concluído' && status !== 'concluido' && status !== 'recebido';
+      
+      if (type === 'entrada' && isPending) {
         var parts = t.date.split('-');
         var tDate = new Date(parts[0], parts[1] - 1, parts[2]);
         
