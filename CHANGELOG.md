@@ -89,6 +89,33 @@ Status: ✅ Completo
 
 ---
 
+### CORREÇÃO: Enhanced Insights Usando Patrimônio Errado
+
+**Problema**: Os insights inteligentes (Runway, Capital de Giro) usavam `GLOBAL_DATA.accounts` ao invés dos bancos para calcular o patrimônio.
+
+**Solução implementada**:
+- Agora usa `GLOBAL_DATA.patrimonioTotal` ou soma dos saldos dos bancos
+- Insights de Runway e Capital de Giro agora são precisos
+
+**Arquivos modificados**:
+- `JS_EnhancedInsights.html` - Corrigido uso de patrimônio
+
+---
+
+### CORREÇÃO: AlertService Usando Contas ao Invés de Bancos
+
+**Problema**: O sistema de alertas verificava saldo das contas ao invés dos bancos para projeção de fluxo de caixa e alertas de saldo baixo.
+
+**Solução implementada**:
+- `checkCashFlowProjection()` agora recebe e usa dados de bancos
+- `checkLowBalance()` agora verifica bancos E contas
+- Alertas de saldo negativo em banco agora são CRÍTICOS
+
+**Arquivos modificados**:
+- `AlertService.js` - Funções `analyzeAndGenerateAlerts()`, `checkCashFlowProjection()`, `checkLowBalance()` atualizadas
+
+---
+
 ## 🔧 Correções v3.4.0 (Janeiro 2026)
 
 ### CORREÇÃO CRÍTICA: Bug no Painel de Metas
