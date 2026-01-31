@@ -1,10 +1,91 @@
-# ✨ Melhorias Implementadas - Dashboard Financeiro B2B v3.4
+# ✨ Melhorias Implementadas - Dashboard Financeiro B2B v3.5
 
 ## 📋 Resumo das Implementações
 
 Data: Janeiro 2026
-Versão: 3.4.0
+Versão: 3.5.0
 Status: ✅ Completo
+
+---
+
+## 🔧 Correções v3.5.0 (Janeiro 2026)
+
+### CORREÇÃO CRÍTICA: Saldo dos Bancos e Contas Fixos
+
+**Problema**: O saldo dos bancos mostrava o valor fixo da planilha (saldo inicial), sem considerar as transações realizadas. O patrimônio total também estava incorreto.
+
+**Causa raiz**: O `DataService.readBanks()` simplesmente lia o valor da planilha sem recalcular com base nas transações.
+
+**Solução implementada**:
+- O saldo agora é calculado dinamicamente: `saldo_atual = saldo_inicial + entradas - saídas`
+- Para BANCOS: considera apenas transações com status "Pago/Concluído/Recebido"
+- Para CONTAS/PROJETOS: considera todas as transações associadas
+- O patrimônio total é agora a soma dos saldos dinâmicos de todos os bancos
+
+**Arquivos modificados**:
+- `DataService.js` - Funções `fetchAllData()`, `readBanks()`, `readAccounts()` reescritas
+
+---
+
+### CORREÇÃO: Botão Atualizar Não Limpava Cache Completamente
+
+**Problema**: Ao clicar em "Atualizar", dados antigos ("fantasmas") persistiam.
+
+**Causa raiz**: O refresh não limpava o cache do Google Apps Script nem resetava as variáveis locais do frontend.
+
+**Solução implementada**:
+- `refreshData()` agora limpa explicitamente o cache antes de buscar novos dados
+- Frontend reseta CURRENT_PAGE, filtros, query de busca
+- Destrói instâncias de gráficos para evitar dados antigos
+- Mensagem de confirmação atualizada
+
+**Arquivos modificados**:
+- `Controller.js` - Funções `getClientData()`, `refreshData()` atualizadas
+- `JS_Events.html` - Função `refreshDashboard()` aprimorada
+
+---
+
+### MELHORIA: KPIs de Entradas/Saídas/Saldo Reposicionados
+
+**Problema**: Os cards de "Entradas", "Saídas" e "Saldo Líquido" estavam muito abaixo na página.
+
+**Solução implementada**:
+- KPIs agora aparecem PRIMEIRO após o header
+- Design renovado com gradientes coloridos
+- Ícones mais claros para cada tipo de movimentação
+- Cards com efeito hover suave
+
+**Arquivos modificados**:
+- `JS_Render.html` - Função `renderCashFlowDashboard()` reorganizada
+
+---
+
+### CORREÇÃO: Projeção de Fluxo de Caixa Usando Valores Incorretos
+
+**Problema**: A projeção de fluxo de caixa usava um valor inicial fixo ao invés do patrimônio atual calculado.
+
+**Solução implementada**:
+- A projeção agora parte do `patrimonioTotal` calculado dinamicamente
+- Considera apenas transações PENDENTES para os próximos 30 dias
+
+**Arquivos modificados**:
+- `JS_Logic.html` - Função `getCashFlowProjection()` atualizada
+
+---
+
+### MELHORIA: Patrimônio Total Calculado Corretamente
+
+**Problema**: O header mostrava patrimônio baseado nos balances fixos das contas.
+
+**Solução implementada**:
+- Patrimônio agora é calculado como soma dos saldos dinâmicos dos BANCOS
+- Exibido no header com label "Patrimônio Total"
+- Score de saúde financeira usa o valor correto
+
+**Arquivos modificados**:
+- `DataService.js` - Adiciona `patrimonioTotal` ao retorno de `fetchAllData()`
+- `JS_Render.html` - Função `renderHeader()` atualizada
+- `JS_Logic.html` - Função `calculateFinancialHealth()` corrigida
 
 ---
 
