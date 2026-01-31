@@ -179,8 +179,8 @@ function getTransactionVisualStatus(transaction) {
     today.setHours(0, 0, 0, 0);
     const tDate = parseDate(transaction.date);
     
-    const status = transaction.status ? transaction.status.toLowerCase().trim() : '';
-    const isPago = status === 'pago' || status === 'concluído' || status === 'recebido';
+    // Usa a função global para consistência
+    const isPago = isTransactionPaid(transaction);
     
     // Se está pago
     if (isPago) {
