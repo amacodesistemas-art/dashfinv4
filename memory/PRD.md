@@ -2,7 +2,7 @@
 
 ## Problema Original
 
-Sistema de dashboard financeiro B2B profissional para consultoria financeira atender múltiplos clientes.
+Sistema de dashboard financeiro B2B profissional para consultoria financeira atender múltiplos clientes. O cliente da consultoria visualiza seu fluxo financeiro e tem insights sobre saúde financeira - **apenas visualização, sem inserir ou enviar dados**. Funcionalidades de importação e edição são exclusivas da equipe de consultoria.
 
 ## Hierarquia de Dados (ATUALIZADA)
 
@@ -20,17 +20,53 @@ BANCO (onde o dinheiro está fisicamente)
 
 **Importante:** Uma CONTA pode movimentar em VÁRIOS bancos.
 
-## Modelo de Negócio
+## Modelo de Negócio (ATUALIZADO v3.5)
+
+### Planos para Clientes:
 
 | Plano | Preço | IA | DRE | Alertas | Importação |
 |-------|-------|-----|-----|---------|------------|
-| Básico | R$ 297/mês | ❌ | ❌ | ❌ | ✅ |
-| Profissional | R$ 597/mês | 30/mês | ✅ | ❌ | ✅ |
-| Enterprise | R$ 1.297/mês | ∞ | ✅ | ✅ | ✅ |
+| **Básico** | R$ 97/mês | ❌ | ❌ | ❌ | ❌ |
+| **Intermediário** | R$ 197/mês | ❌ | ✅ | ❌ | ❌ |
+| **Avançado** | R$ 397/mês | ✅ | ✅ | ✅ | ❌ |
+
+### Plano para Equipe Interna:
+
+| Plano | Preço | Todas Features | Importação |
+|-------|-------|----------------|------------|
+| **Admin** | Interno | ✅ | ✅ |
+
+**IMPORTANTE**: Clientes NUNCA veem funcionalidades de importação/edição de dados.
 
 ## O Que Foi Implementado
 
-### Versão 3.4.0 (Dezembro 2025) ✅ ATUAL
+### Versão 3.5.0 (Janeiro 2026) ✅ ATUAL
+
+#### Correções Críticas
+
+1. **Botão de Importação oculto para clientes** 
+   - Feature flag `import_enabled` adicionada em todos os planos
+   - Valor `false` para todos planos de cliente
+   - Novo plano `admin` com `import_enabled: true` para equipe
+
+2. **Nome da empresa corrigido**
+   - Função `readConfig()` aprimorada com mapeamento expandido de chaves
+   - Reconhece variações: nome, Nome, nome_cliente, Cliente, Empresa, razao_social
+   - Fallback seguro para "Cliente" se não encontrado
+
+3. **Onboarding atualizado**
+   - 8 passos detalhados (era 6)
+   - Descrições mais completas
+   - Novos passos sobre filtros e gráficos
+
+**Arquivos modificados**:
+- `DataService.js` - Features e readConfig
+- `PlanManager.js` - Consistência de features
+- `JS_Init.html` - Condição de exibição
+- `JS_Onboarding.html` - Passos atualizados
+- `CHANGELOG.md` - Documentação
+
+### Versão 3.4.0 (Dezembro 2025)
 
 #### Nova Estrutura de Dados
 - **BANCOS** (nova aba): Onde o dinheiro está (Nubank, Inter, etc.)
