@@ -137,6 +137,7 @@ function renderBanksSection() {
 
 // Renderiza bancos em formato de cards
 function renderBanksCards(banksData) {
+    const blurClass = getBlurClass();
     return `
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             ${banksData.map(bank => `
