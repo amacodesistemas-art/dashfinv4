@@ -359,6 +359,10 @@ const DataService = {
             if (key === 'cnpj') {
               config.cnpj = value;
             }
+            // Lista de emails da equipe (separados por vírgula)
+            if (key === 'emails_equipe' || key === 'staff_emails' || key === 'equipe') {
+              config.emails_equipe = value;
+            }
           }
         });
       }
