@@ -1,10 +1,86 @@
-# ✨ Melhorias Implementadas - Dashboard Financeiro B2B v3.1
+# ✨ Melhorias Implementadas - Dashboard Financeiro B2B v3.2
 
 ## 📋 Resumo das Implementações
 
-Data: Dezembro 2025
-Versão: 3.1.0
+Data: Janeiro 2026
+Versão: 3.2.0
 Status: ✅ Completo
+
+---
+
+## 🔧 Correções v3.2.0 (Janeiro 2026)
+
+### 1. Correção: Botão de Importação visível para clientes
+
+**Problema**: O botão "Importar" (importação de OFX/CSV) estava aparecendo para todos os usuários, incluindo clientes. Clientes não devem ter acesso a essa funcionalidade pois é de uso exclusivo da equipe de consultoria.
+
+**Solução implementada**:
+
+1. **Nova feature flag `import_enabled`**: Adicionada em todos os planos com valor `false` para clientes.
+
+2. **Plano `admin` criado**: Novo plano especial para uso interno da equipe com `import_enabled: true`.
+
+3. **Verificação no `JS_Init.html`**: O botão de importação agora só é adicionado se `hasFeature('import_enabled')` retornar `true`.
+
+**Arquivos modificados**:
+- `DataService.js` - Adicionada feature `import_enabled` em todos os planos
+- `PlanManager.js` - Consistência com DataService
+- `JS_Init.html` - Condição para exibição do botão
+
+---
+
+### 2. Correção: Nome da empresa mostrando "desconhecido"
+
+**Problema**: A mensagem de boas-vindas mostrava "desconhecido" ou valor em branco ao invés do nome real da empresa cliente.
+
+**Solução implementada**:
+
+1. **Mapeamento expandido de chaves**: A função `readConfig()` agora reconhece mais variações de chaves para o nome:
+   - `nome`, `Nome`, `NOME`
+   - `nome_cliente`, `Nome_Cliente`, `NOME_CLIENTE`
+   - `cliente`, `Cliente`
+   - `empresa`, `Empresa`
+   - `razao_social`, `Razão Social`
+
+2. **Validação robusta**: Verificações adicionais para strings vazias, `'undefined'`, `'null'`.
+
+3. **Fallback seguro**: Se nenhuma chave válida for encontrada, usa "Cliente" como padrão.
+
+**Arquivos modificados**:
+- `DataService.js` - Função `readConfig()` aprimorada
+
+---
+
+### 3. Atualização: Onboarding renovado
+
+**Melhorias**:
+- 8 passos ao invés de 6 (mais detalhado)
+- Descrições mais completas de cada funcionalidade
+- Novo passo explicando filtros de período
+- Novo passo sobre gráficos e análises
+- Atalhos de teclado com formatação melhorada
+- Mensagem final mais acolhedora
+
+**Arquivos modificados**:
+- `JS_Onboarding.html` - Array `ONBOARDING_STEPS` atualizado
+
+---
+
+## 📊 Sistema de Planos (Atualizado)
+
+### Planos para Clientes:
+
+| Plano | DRE | IA | Importação |
+|-------|-----|-----|------------|
+| **Básico** (R$ 97/mês) | ❌ | ❌ | ❌ |
+| **Intermediário** (R$ 197/mês) | ✅ | ❌ | ❌ |
+| **Avançado** (R$ 397/mês) | ✅ | ✅ | ❌ |
+
+### Plano para Equipe:
+
+| Plano | Todas Features | Importação |
+|-------|----------------|------------|
+| **Admin** (Interno) | ✅ | ✅ |
 
 ---
 
