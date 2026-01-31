@@ -30,10 +30,11 @@ var AlertService = {
     
     var transactions = data.transactions || [];
     var accounts = data.accounts || [];
+    var banks = data.banks || [];
     var goals = data.goals || [];
     
     // 1. ALERTA: Fluxo de Caixa Crítico (projeção negativa em 7 dias)
-    var fluxoAlert = this.checkCashFlowProjection(transactions, accounts);
+    var fluxoAlert = this.checkCashFlowProjection(transactions, accounts, banks);
     if (fluxoAlert) alerts.push(fluxoAlert);
     
     // 2. ALERTA: Inadimplência (faturas a receber atrasadas)
@@ -52,8 +53,8 @@ var AlertService = {
     var vencimentoAlerts = this.checkDueToday(transactions, today);
     alerts = alerts.concat(vencimentoAlerts);
     
-    // 6. ALERTA: Saldo Baixo em Contas
-    var saldoAlerts = this.checkLowBalance(accounts);
+    // 6. ALERTA: Saldo Baixo em Contas e Bancos
+    var saldoAlerts = this.checkLowBalance(accounts, banks);
     alerts = alerts.concat(saldoAlerts);
     
     // Ordena por prioridade
