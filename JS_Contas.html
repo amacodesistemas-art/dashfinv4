@@ -231,6 +231,7 @@ function renderProjectsCards(projectsData) {
 
 // Renderiza projetos em formato de lista
 function renderProjectsList(projectsData) {
+    const blurClass = getBlurClass();
     return `
         <div class="bg-white dark:bg-slate-800 rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700">
             <table class="w-full">
