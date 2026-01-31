@@ -305,7 +305,10 @@ var AlertService = {
     var todayStr = today.toISOString().split('T')[0];
     
     var dueToday = transactions.filter(function(t) {
-      return t.date === todayStr && t.status !== 'Pago' && t.status !== 'Concluído' && t.status !== 'Recebido';
+      // Verificação CASE INSENSITIVE
+      var status = (t.status || '').toLowerCase().trim();
+      var isPending = status !== 'pago' && status !== 'concluído' && status !== 'concluido' && status !== 'recebido';
+      return t.date === todayStr && isPending;
     });
     
     if (dueToday.length > 0) {
