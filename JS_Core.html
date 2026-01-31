@@ -113,6 +113,29 @@ let ADVANCED_FILTERS = {
     function isTransactionPending(t) {
         return !isTransactionPaid(t);
     }
+    
+    // Retorna classes CSS para estilizar o badge de status
+    function getStatusStyle(status) {
+        if (!status) return 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300';
+        
+        const s = status.toLowerCase().trim();
+        
+        if (s === 'pago' || s === 'concluído' || s === 'concluido' || s === 'recebido') {
+            return 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300';
+        }
+        if (s === 'pendente' || s === 'aberto' || s === 'agendado') {
+            return 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300';
+        }
+        if (s === 'atrasado' || s === 'vencido') {
+            return 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300';
+        }
+        if (s === 'cancelado') {
+            return 'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-400 line-through';
+        }
+        
+        // Default
+        return 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300';
+    }
 
     function showToast(message, type = 'info', duration = 3000) {
         const toast = document.createElement('div');
