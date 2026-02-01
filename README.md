@@ -1,10 +1,17 @@
 # 📊 Dashboard Financeiro B2B - Sistema Completo
 
-**Versão**: 3.5.0 | **Última Atualização**: Janeiro 2026
+**Versão**: 3.6.0 | **Última Atualização**: Janeiro 2026
 
 Sistema profissional de gestão financeira para empresas B2B, com visualização inteligente, análises avançadas e sincronização com Google Sheets.
 
 ---
+
+## 📢 Novidades da v3.6.0
+
+- ✅ **NOVO: Painel de Aprovação de Importação**: Fluxo completo de importação dentro do dashboard
+- ✅ **Aprendizado automático de regras**: IA aprende com correções do consultor
+- ✅ **Gerenciador de regras**: Visualize e gerencie regras de categorização
+- ✅ **Categorização inteligente**: Regras primeiro, IA quando necessário
 
 ## 📢 Novidades da v3.5.0
 
@@ -12,7 +19,6 @@ Sistema profissional de gestão financeira para empresas B2B, com visualização
 - ✅ **Botão Atualizar aprimorado**: Limpa cache completamente, sem dados "fantasmas"
 - ✅ **KPIs reposicionados**: Entradas/Saídas/Saldo agora aparecem primeiro no dashboard
 - ✅ **Projeção de fluxo de caixa corrigida**: Usa o patrimônio atual calculado
-- ✅ **Performance melhorada**: Gráficos são destruídos e recriados corretamente
 
 ## 📢 Novidades da v3.4.0
 
