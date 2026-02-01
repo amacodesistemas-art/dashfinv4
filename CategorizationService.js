@@ -76,11 +76,11 @@ var CategorizationService = {
     prompt += 'Valor: R$ ' + value + '\n\n';
     prompt += 'Categorias disponiveis: ' + categoriesList + '\n\n';
     prompt += 'Responda APENAS no formato JSON:\n';
-    prompt += '{"category": "Nome da Categoria", "type": "Entrada ou Saida", "confidence": 0.8}\n';
+    prompt += '{"category": "Nome da Categoria", "subcategory": "Subcategoria opcional", "type": "Entrada ou Saida", "confidence": 0.8}\n';
     prompt += 'Se nao tiver certeza, use confidence baixo (0.5-0.7).';
     
     try {
-      var response = callOpenAI(apiKey, prompt, 100);
+      var response = callOpenAI(apiKey, prompt, 150);
       
       // Extrai JSON da resposta
       var jsonMatch = response.match(/\{[^}]+\}/);
@@ -105,7 +105,7 @@ var CategorizationService = {
     var aiCount = 0;
     var maxAIPerBatch = 20; // Limita chamadas de IA por lote
     
-    // Busca categorias existentes
+    // Busca categorias existentes (Contas/Projetos)
     var existingCategories = this.getExistingCategories(ss);
     
     transactions.forEach(function(tx, index) {
@@ -113,7 +113,9 @@ var CategorizationService = {
         index: index,
         description: tx.description,
         value: tx.value,
-        original: tx
+        date: tx.date,
+        transactionType: tx.transactionType || (tx.value < 0 ? 'Saída' : 'Entrada'),
+        selected: true // Por padrão, todas vêm selecionadas
       };
       
       // Tenta categorizar por regras primeiro
@@ -122,7 +124,7 @@ var CategorizationService = {
       if (ruleResult) {
         result.category = ruleResult.category;
         result.subcategory = ruleResult.subcategory;
-        result.type = ruleResult.type === 'auto' ? (tx.value < 0 ? 'Saída' : 'Entrada') : ruleResult.type;
+        result.transactionType = ruleResult.type === 'auto' ? result.transactionType : ruleResult.type;
         result.confidence = ruleResult.confidence;
         result.method = 'rule';
       } else if (aiCount < maxAIPerBatch && apiKey) {
@@ -131,13 +133,13 @@ var CategorizationService = {
         
         if (!aiResult.error) {
           result.category = aiResult.category;
-          result.type = aiResult.type;
+          result.subcategory = aiResult.subcategory || '';
+          result.transactionType = aiResult.type || result.transactionType;
           result.confidence = aiResult.confidence;
           result.method = 'ai';
           aiCount++;
         } else {
           result.category = 'A Classificar';
-          result.type = tx.value < 0 ? 'Saída' : 'Entrada';
           result.confidence = 0;
           result.method = 'pending';
           result.error = aiResult.error;
@@ -145,7 +147,6 @@ var CategorizationService = {
       } else {
         // Sem regra e sem IA disponível
         result.category = 'A Classificar';
-        result.type = tx.value < 0 ? 'Saída' : 'Entrada';
         result.confidence = 0;
         result.method = 'pending';
       }
@@ -164,24 +165,24 @@ var CategorizationService = {
     };
   },
   
-  // Busca categorias existentes nas transações
+  // Busca categorias existentes (agora usa CONTAS/Projetos)
   getExistingCategories: function(ss) {
-    var sheet = ss.getSheetByName('TRANSACOES');
+    var sheet = ss.getSheetByName('CONTAS');
     if (!sheet) return [];
     
     var lastRow = sheet.getLastRow();
     if (lastRow < 2) return [];
     
-    var data = sheet.getRange(2, 3, lastRow - 1, 1).getValues();
-    var categories = {};
+    var data = sheet.getRange(2, 2, lastRow - 1, 1).getValues(); // Coluna Nome
+    var categories = [];
     
     data.forEach(function(row) {
       if (row[0]) {
-        categories[String(row[0]).trim()] = true;
+        categories.push(String(row[0]).trim());
       }
     });
     
-    return Object.keys(categories).sort();
+    return categories;
   },
   
   // Adiciona nova regra de categorização
@@ -192,15 +193,43 @@ var CategorizationService = {
       sheet = ss.insertSheet('REGRAS_CATEGORIZACAO');
       sheet.appendRow(['padrao', 'categoria', 'subcategoria', 'tipo']);
       sheet.getRange(1, 1, 1, 4).setBackground('#8b5cf6').setFontColor('#ffffff').setFontWeight('bold');
+      sheet.setFrozenRows(1);
     }
     
-    sheet.appendRow([pattern.toLowerCase(), category, subcategory || '', type || 'auto']);
+    // Verifica se já existe
+    var data = sheet.getDataRange().getValues();
+    for (var i = 1; i < data.length; i++) {
+      if (String(data[i][0]).toLowerCase().trim() === pattern.toLowerCase().trim()) {
+        // Atualiza existente
+        sheet.getRange(i + 1, 2, 1, 3).setValues([[category, subcategory || '', type || 'auto']]);
+        return { success: true, updated: true };
+      }
+    }
     
-    return { success: true };
+    // Adiciona nova
+    sheet.appendRow([pattern.toLowerCase().trim(), category, subcategory || '', type || 'auto']);
+    
+    return { success: true, added: true };
   },
   
-  // Aprende com correção do usuário
-  learnFromCorrection: function(ss, description, correctCategory, correctType) {
+  // Remove regra de categorização
+  deleteCategorizationRule: function(ss, pattern) {
+    var sheet = ss.getSheetByName('REGRAS_CATEGORIZACAO');
+    if (!sheet) return { success: false, error: 'Aba não encontrada' };
+    
+    var data = sheet.getDataRange().getValues();
+    for (var i = 1; i < data.length; i++) {
+      if (String(data[i][0]).toLowerCase().trim() === pattern.toLowerCase().trim()) {
+        sheet.deleteRow(i + 1);
+        return { success: true };
+      }
+    }
+    
+    return { success: false, error: 'Regra não encontrada' };
+  },
+  
+  // Aprende com correção do usuário (cria regra automática)
+  learnFromCorrection: function(ss, description, correctCategory, correctSubcategory, correctType) {
     // Extrai palavras-chave da descrição
     var words = description.toLowerCase()
       .replace(/[0-9]/g, '')
@@ -212,7 +241,7 @@ var CategorizationService = {
     var pattern = words.slice(0, 3).join(' ');
     
     if (pattern.length > 5) {
-      this.addCategorizationRule(ss, pattern, correctCategory, '', correctType);
+      this.addCategorizationRule(ss, pattern, correctCategory, correctSubcategory || '', correctType || 'auto');
       Logger.log('[Categorization] Nova regra aprendida: "' + pattern + '" -> ' + correctCategory);
       return { learned: true, pattern: pattern };
     }
@@ -221,7 +250,42 @@ var CategorizationService = {
   }
 };
 
-// Funções expostas para o frontend
+// ===========================================
+// FUNÇÕES EXPOSTAS PARA O FRONTEND
+// ===========================================
+
+// Retorna contexto para categorização (regras, categorias, contas)
+function getCategorizationContext() {
+  var ss = SpreadsheetApp.openById(getSpreadsheetId());
+  
+  var rules = CategorizationService.getCategorizationRules(ss);
+  var categories = CategorizationService.getExistingCategories(ss);
+  
+  // Busca contas/projetos
+  var accounts = DataService.readAccounts(ss);
+  
+  // Busca subcategorias das transações existentes
+  var subcategories = {};
+  var txSheet = ss.getSheetByName('TRANSACOES');
+  if (txSheet && txSheet.getLastRow() > 1) {
+    var txData = txSheet.getRange(2, 3, txSheet.getLastRow() - 1, 2).getValues(); // Categoria, Subcategoria
+    txData.forEach(function(row) {
+      if (row[0] && row[1]) {
+        if (!subcategories[row[0]]) subcategories[row[0]] = [];
+        if (subcategories[row[0]].indexOf(row[1]) === -1) {
+          subcategories[row[0]].push(row[1]);
+        }
+      }
+    });
+  }
+  
+  return {
+    rules: rules,
+    categories: categories,
+    accounts: accounts,
+    subcategories: subcategories
+  };
+}
 
 // Categoriza transações importadas
 function categorizeImportedTransactions(transactions) {
@@ -231,19 +295,106 @@ function categorizeImportedTransactions(transactions) {
   return CategorizationService.categorizeBatch(transactions, ss, apiKey);
 }
 
+// Categoriza uma única transação (re-categorização)
+function categorizeSingleTransaction(description, value, transactionType) {
+  var ss = SpreadsheetApp.openById(getSpreadsheetId());
+  var apiKey = getAPIKey(ss);
+  
+  if (!apiKey) {
+    return { error: 'API Key não configurada' };
+  }
+  
+  var categories = CategorizationService.getExistingCategories(ss);
+  return CategorizationService.categorizeWithAI(description, value, apiKey, categories);
+}
+
+// Categoriza em lote (re-categorização)
+function categorizeBatchTransactions(transactions) {
+  var ss = SpreadsheetApp.openById(getSpreadsheetId());
+  var apiKey = getAPIKey(ss);
+  
+  if (!apiKey) {
+    return [{ error: 'API Key não configurada' }];
+  }
+  
+  var categories = CategorizationService.getExistingCategories(ss);
+  var results = [];
+  
+  transactions.forEach(function(tx) {
+    var result = CategorizationService.categorizeWithAI(tx.description, tx.value, apiKey, categories);
+    result.description = tx.description;
+    results.push(result);
+  });
+  
+  return results;
+}
+
 // Adiciona regra de categorização
 function addCategorizationRule(pattern, category, subcategory, type) {
   var ss = SpreadsheetApp.openById(getSpreadsheetId());
   return CategorizationService.addCategorizationRule(ss, pattern, category, subcategory, type);
 }
 
+// Remove regra de categorização
+function deleteCategorizationRule(pattern) {
+  var ss = SpreadsheetApp.openById(getSpreadsheetId());
+  return CategorizationService.deleteCategorizationRule(ss, pattern);
+}
+
+// Salva transações aprovadas diretamente na planilha do cliente
+function saveApprovedTransactions(transactions, bankId) {
+  var ss = SpreadsheetApp.openById(getSpreadsheetId());
+  var sheet = ss.getSheetByName('TRANSACOES');
+  
+  if (!sheet) {
+    return { success: false, error: 'Aba TRANSACOES não encontrada' };
+  }
+  
+  var saved = 0;
+  var errors = [];
+  
+  // Estrutura: Data, Tipo, Categoria, Subcategoria, Valor, Conta, Banco, Status, Descrição, Centro_Custo
+  transactions.forEach(function(tx, index) {
+    try {
+      sheet.appendRow([
+        tx.date,
+        tx.transactionType,
+        tx.category || 'A Classificar',
+        tx.subcategory || '',
+        tx.value,
+        '',  // Conta (ID) - será preenchido se necessário
+        bankId,
+        tx.status || 'Pago',
+        tx.description,
+        tx.costCenter || ''
+      ]);
+      saved++;
+      
+      // Se tem categoria válida, aprende a regra automaticamente
+      if (tx.category && tx.category !== 'A Classificar') {
+        CategorizationService.learnFromCorrection(ss, tx.description, tx.category, tx.subcategory, tx.transactionType);
+      }
+      
+    } catch (e) {
+      errors.push({ index: index, error: e.message });
+    }
+  });
+  
+  // Limpa cache após importação
+  CacheManager.remove(getCacheConfig().key);
+  
+  return {
+    success: true,
+    saved: saved,
+    errors: errors
+  };
+}
+
 // Aprende com correção
 function learnCategorization(description, correctCategory, correctType) {
   var ss = SpreadsheetApp.openById(getSpreadsheetId());
-  return CategorizationService.learnFromCorrection(ss, description, correctCategory, correctType);
+  return CategorizationService.learnFromCorrection(ss, description, correctCategory, '', correctType);
 }
-
-// Nota: getAPIKey foi movido para Config.js para evitar duplicação
 
 // Teste de categorização
 function testCategorization() {
