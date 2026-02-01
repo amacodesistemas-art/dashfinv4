@@ -378,19 +378,17 @@ function importOFXFile(fileContent, bankId) {
   var apiKey = getAPIKey(ss);
   var categorized = CategorizationService.categorizeBatch(dupCheck.unique, ss, apiKey);
   
-  // Cria aba de conciliação para revisão
-  var importId = new Date().getTime();
-  var reconciliation = ImportService.createReconciliationSheet(ss, categorized.results, importId, bankId);
-  
+  // NOVO: Retorna as transações categorizadas para o frontend aprovar
+  // Não cria mais aba de conciliação na planilha!
   return {
     success: true,
     total: parseResult.count,
     duplicates: dupCheck.duplicates.length,
     toReview: dupCheck.unique.length,
     categorization: categorized.stats,
-    reconciliationSheet: reconciliation.sheetName,
-    reconciliationUrl: reconciliation.url,
-    period: parseResult.period
+    categorizedTransactions: categorized.results, // Envia para o painel de aprovação
+    period: parseResult.period,
+    bankId: bankId
   };
 }
 
@@ -409,27 +407,21 @@ function importCSVFile(fileContent, config, bankId) {
   var apiKey = getAPIKey(ss);
   var categorized = CategorizationService.categorizeBatch(dupCheck.unique, ss, apiKey);
   
-  var importId = new Date().getTime();
-  var reconciliation = ImportService.createReconciliationSheet(ss, categorized.results, importId, bankId);
-  
+  // NOVO: Retorna as transações categorizadas para o frontend aprovar
   return {
     success: true,
     total: parseResult.count,
     duplicates: dupCheck.duplicates.length,
     toReview: dupCheck.unique.length,
     categorization: categorized.stats,
-    reconciliationSheet: reconciliation.sheetName,
-    reconciliationUrl: reconciliation.url
+    categorizedTransactions: categorized.results, // Envia para o painel de aprovação
+    bankId: bankId
   };
 }
 
-// Aprova transações da conciliação
-function approveImportedTransactions(importSheetName, bankId) {
-  var ss = SpreadsheetApp.openById(getSpreadsheetId());
-  return ImportService.processApprovedTransactions(ss, importSheetName, bankId);
-}
+// REMOVIDO: approveImportedTransactions - agora usa saveApprovedTransactions do CategorizationService
 
-// Lista abas de importação pendentes
+// Lista abas de importação pendentes (mantido para compatibilidade)
 function getPendingImports() {
   var ss = SpreadsheetApp.openById(getSpreadsheetId());
   var sheets = ss.getSheets();
