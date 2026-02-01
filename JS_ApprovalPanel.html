@@ -670,4 +670,26 @@ function deleteRule(index) {
         })
         .deleteCategorizationRule(rule.pattern);
 }
+
+// ===================================
+// EXPOSIÇÃO GLOBAL DAS FUNÇÕES
+// ===================================
+// Necessário para que as funções sejam acessíveis de outros scripts e onclick handlers
+window.openApprovalPanel = openApprovalPanel;
+window.closeApprovalPanel = closeApprovalPanel;
+window.renderApprovalPanel = renderApprovalPanel;
+window.toggleApprovalItem = toggleApprovalItem;
+window.toggleSelectAllApproval = toggleSelectAllApproval;
+window.updateApprovalField = updateApprovalField;
+window.createRuleFromTransaction = createRuleFromTransaction;
+window.closeRuleModal = closeRuleModal;
+window.saveCategorizationRule = saveCategorizationRule;
+window.recategorizeSingle = recategorizeSingle;
+window.recategorizeSelected = recategorizeSelected;
+window.confirmApproval = confirmApproval;
+window.showLoadingOverlay = showLoadingOverlay;
+window.hideLoadingOverlay = hideLoadingOverlay;
+window.openRulesManager = openRulesManager;
+window.closeRulesManager = closeRulesManager;
+window.deleteRule = deleteRule;
 </script>
