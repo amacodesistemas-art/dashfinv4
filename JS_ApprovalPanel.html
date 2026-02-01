@@ -513,17 +513,30 @@ function confirmApproval() {
     showLoadingOverlay('Salvando transações...');
     
     // Prepara dados para salvar
-    const transactionsToSave = selected.map(tx => ({
-        date: tx.date,
-        description: tx.description,
-        value: tx.value,
-        transactionType: tx.transactionType,
-        category: tx.category || 'A Classificar',
-        subcategory: tx.subcategory || '',
-        costCenter: tx.costCenter || '',
-        status: 'Pago', // Transações de extrato já foram realizadas
-        bankId: APPROVAL_STATE.bankId
-    }));
+    // Busca o accountId correspondente ao nome da conta selecionada
+    const transactionsToSave = selected.map(tx => {
+        // Encontra o ID da conta pelo nome selecionado
+        let accountId = tx.accountId || '';
+        if (!accountId && tx.category && tx.category !== 'A Classificar') {
+            const account = APPROVAL_STATE.accounts.find(acc => acc.name === tx.category);
+            if (account) {
+                accountId = account.id || '';
+            }
+        }
+        
+        return {
+            date: tx.date,
+            description: tx.description,
+            value: tx.value,
+            transactionType: tx.transactionType,
+            category: tx.category || 'A Classificar',
+            subcategory: tx.subcategory || '',
+            costCenter: tx.costCenter || '',
+            status: 'Pago', // Transações de extrato já foram realizadas
+            bankId: APPROVAL_STATE.bankId,
+            accountId: accountId  // Agora envia o ID da conta corretamente
+        };
+    });
     
     google.script.run
         .withSuccessHandler(function(result) {
