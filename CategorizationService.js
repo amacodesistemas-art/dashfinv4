@@ -379,14 +379,17 @@ function saveApprovedTransactions(transactions, bankId) {
         accountId = accountsMap[categoryLower] || '';
       }
       
+      // Resolve o bankId: usa o parâmetro global ou o ID do banco na transação
+      var resolvedBankId = bankId || tx.bankId || '';
+      
       sheet.appendRow([
         tx.date,
         tx.transactionType,
         tx.category || 'A Classificar',
         tx.subcategory || '',
         tx.value,
-        accountId,  // Conta (ID) - agora vincula corretamente
-        bankId,
+        accountId,        // Conta (ID) - vincula corretamente
+        resolvedBankId,   // Banco (ID) - vincula corretamente
         tx.status || 'Pago',
         tx.description,
         tx.costCenter || ''
