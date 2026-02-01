@@ -1,10 +1,53 @@
-# ✨ Melhorias Implementadas - Dashboard Financeiro B2B v3.5
+# ✨ Melhorias Implementadas - Dashboard Financeiro B2B v3.6
 
 ## 📋 Resumo das Implementações
 
 Data: Janeiro 2026
-Versão: 3.5.0
+Versão: 3.6.0
 Status: ✅ Completo
+
+---
+
+## 🆕 NOVA FUNCIONALIDADE v3.6.0: Painel de Aprovação de Importação
+
+### Problema Identificado
+O fluxo de importação anterior tinha falhas graves de arquitetura:
+1. Criava uma aba na planilha do cliente para aprovação
+2. Pedia para executar uma função que não existia na planilha do cliente
+3. Com múltiplos clientes, era impossível saber qual planilha usar
+4. A IA não aprendia automaticamente com as correções do usuário
+
+### Solução Implementada: Painel Integrado ao Dashboard
+
+**Novo fluxo de importação:**
+1. Consultor seleciona banco e faz upload do extrato (OFX/CSV)
+2. Sistema categoriza transações usando:
+   - **Regras existentes** (aba REGRAS_CATEGORIZACAO) - prioridade
+   - **IA (OpenAI)** - quando não há regra correspondente
+3. Abre **Painel de Aprovação** dentro do dashboard
+4. Consultor pode:
+   - Editar categoria, subcategoria e centro de custo de cada transação
+   - **Criar regras** a partir de transações (para futuras importações)
+   - **Re-categorizar** com IA transações pendentes
+   - Selecionar/desselecionar transações
+5. Ao confirmar, transações são salvas diretamente na planilha do cliente
+6. **Aprendizado automático**: sistema cria regras baseado nas correções
+
+**Arquivos criados/modificados:**
+- `JS_ApprovalPanel.html` - **NOVO** - Painel de aprovação completo
+- `CategorizationService.js` - Novas funções: `saveApprovedTransactions()`, `getCategorizationContext()`, `deleteCategorizationRule()`, etc.
+- `ImportService.js` - Retorna transações categorizadas ao invés de criar aba
+- `JS_Import.html` - Integração com novo painel
+
+---
+
+### Como a IA Aprende
+
+1. **Regras manuais**: Consultor cria regra a partir de uma transação
+2. **Aprendizado automático**: Quando uma transação é aprovada com categoria diferente de "A Classificar", o sistema extrai palavras-chave e cria uma regra automaticamente
+3. **Histórico limitado**: A IA não lê todo o histórico de transações (seria muito lento). Ela usa apenas:
+   - Regras da aba REGRAS_CATEGORIZACAO
+   - Lista de categorias (Contas/Projetos) existentes
 
 ---
 
