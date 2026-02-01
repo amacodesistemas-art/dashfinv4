@@ -352,16 +352,25 @@ function handleImportResult(result) {
     document.getElementById('import-categorized').textContent = result.categorization.byRule + result.categorization.byAI;
     document.getElementById('import-pending').textContent = result.categorization.pending;
     
-    // Mostra resultado
-    showToast(`✅ ${result.toReview} transações importadas! ${result.duplicates} duplicatas ignoradas.`, 'success', 5000);
-    
-    // Mostra link para revisão
-    if (result.reconciliationUrl) {
-        showReconciliationLink(result);
-    }
-    
+    // Fecha modal de importação
     closeImportModal();
-    refreshDashboard();
+    
+    // Busca nome do banco selecionado
+    const bankSelect = document.getElementById('import-bank');
+    const bankName = bankSelect?.options[bankSelect.selectedIndex]?.text || '';
+    
+    // Abre painel de aprovação com as transações categorizadas
+    // NOVO FLUXO: Tudo acontece dentro do dashboard!
+    showToast(`${result.toReview} transações encontradas. Revise e aprove.`, 'info', 3000);
+    
+    setTimeout(() => {
+        openApprovalPanel({
+            transactions: result.categorizedTransactions || [],
+            bankId: IMPORT_STATE.bankId,
+            bankName: bankName.replace(/[🏦💳💵]/g, '').trim(),
+            stats: result.categorization
+        });
+    }, 500);
 }
 
 // Handle erro de importação
