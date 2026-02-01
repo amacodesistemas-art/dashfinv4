@@ -439,6 +439,22 @@ function addImportButton() {
         lucide.createIcons();
     }
 }
+
+// ===================================
+// EXPOSIÇÃO GLOBAL DAS FUNÇÕES
+// ===================================
+window.openImportModal = openImportModal;
+window.closeImportModal = closeImportModal;
+window.handleDragOver = handleDragOver;
+window.handleDragLeave = handleDragLeave;
+window.handleFileDrop = handleFileDrop;
+window.handleFileSelect = handleFileSelect;
+window.processSelectedFile = processSelectedFile;
+window.processImport = processImport;
+window.handleImportResult = handleImportResult;
+window.handleImportError = handleImportError;
+window.resetImportButton = resetImportButton;
+window.addImportButton = addImportButton;
 </script>
 
 <style>
