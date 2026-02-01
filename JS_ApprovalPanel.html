@@ -1,0 +1,673 @@
+<script>
+// ===================================
+// PAINEL DE APROVAÇÃO DE IMPORTAÇÃO
+// Sistema completo dentro do Dashboard
+// ===================================
+
+let APPROVAL_STATE = {
+    transactions: [],
+    bankId: null,
+    bankName: '',
+    rules: [],
+    categories: [],
+    subcategories: {},
+    selectedCount: 0,
+    editingIndex: null
+};
+
+// Abre o painel de aprovação após importação
+function openApprovalPanel(importResult) {
+    APPROVAL_STATE = {
+        transactions: importResult.transactions || [],
+        bankId: importResult.bankId,
+        bankName: importResult.bankName || '',
+        rules: [],
+        categories: [],
+        subcategories: {},
+        selectedCount: importResult.transactions?.length || 0,
+        editingIndex: null
+    };
+    
+    // Busca regras e categorias existentes
+    loadCategorizationContext();
+}
+
+// Carrega contexto para categorização
+function loadCategorizationContext() {
+    showLoadingOverlay('Carregando regras de categorização...');
+    
+    google.script.run
+        .withSuccessHandler(function(context) {
+            APPROVAL_STATE.rules = context.rules || [];
+            APPROVAL_STATE.categories = context.categories || [];
+            APPROVAL_STATE.subcategories = context.subcategories || {};
+            APPROVAL_STATE.accounts = context.accounts || [];
+            hideLoadingOverlay();
+            renderApprovalPanel();
+        })
+        .withFailureHandler(function(error) {
+            hideLoadingOverlay();
+            showToast('Erro ao carregar contexto: ' + error.message, 'error');
+            renderApprovalPanel(); // Tenta renderizar mesmo assim
+        })
+        .getCategorizationContext();
+}
+
+// Renderiza o painel de aprovação
+function renderApprovalPanel() {
+    const txs = APPROVAL_STATE.transactions;
+    const blurClass = getBlurClass();
+    
+    // Calcula totais
+    const totalEntradas = txs.filter(t => t.selected !== false && t.transactionType === 'Entrada')
+        .reduce((sum, t) => sum + t.value, 0);
+    const totalSaidas = txs.filter(t => t.selected !== false && t.transactionType === 'Saída')
+        .reduce((sum, t) => sum + t.value, 0);
+    const selectedCount = txs.filter(t => t.selected !== false).length;
+    
+    const modalHtml = `
+        <div id="approval-panel" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-2 md:p-4" onclick="closeApprovalPanel(event)">
+            <div class="bg-white dark:bg-slate-800 rounded-2xl w-full max-w-6xl max-h-[95vh] overflow-hidden flex flex-col" onclick="event.stopPropagation()">
+                
+                <!-- Header -->
+                <div class="p-4 md:p-6 border-b border-slate-200 dark:border-slate-700 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-t-2xl">
+                    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        <div>
+                            <h2 class="text-xl font-bold flex items-center gap-2">
+                                <i data-lucide="check-square" class="w-6 h-6"></i>
+                                Aprovar Transações Importadas
+                            </h2>
+                            <p class="text-blue-100 text-sm mt-1">
+                                Banco: <strong>${APPROVAL_STATE.bankName}</strong> • ${txs.length} transações
+                            </p>
+                        </div>
+                        <div class="flex items-center gap-4">
+                            <div class="text-center px-4 py-2 bg-white/10 rounded-lg">
+                                <p class="text-2xl font-bold text-green-300 ${blurClass}">${formatCurrencyCompact(totalEntradas)}</p>
+                                <p class="text-xs text-blue-100">Entradas</p>
+                            </div>
+                            <div class="text-center px-4 py-2 bg-white/10 rounded-lg">
+                                <p class="text-2xl font-bold text-red-300 ${blurClass}">${formatCurrencyCompact(totalSaidas)}</p>
+                                <p class="text-xs text-blue-100">Saídas</p>
+                            </div>
+                            <button onclick="closeApprovalPanel()" class="p-2 hover:bg-white/20 rounded-lg transition-colors">
+                                <i data-lucide="x" class="w-6 h-6"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Toolbar -->
+                <div class="p-3 md:p-4 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-700/50 flex flex-wrap items-center gap-2 md:gap-4">
+                    <div class="flex items-center gap-2">
+                        <input type="checkbox" id="select-all-approval" onchange="toggleSelectAllApproval(this.checked)" 
+                               class="w-4 h-4 rounded" ${selectedCount === txs.length ? 'checked' : ''}>
+                        <label for="select-all-approval" class="text-sm font-medium text-slate-700 dark:text-slate-300">
+                            Selecionar Todos (${selectedCount}/${txs.length})
+                        </label>
+                    </div>
+                    
+                    <div class="flex-1"></div>
+                    
+                    <button onclick="recategorizeSelected()" class="px-3 py-1.5 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-lg text-sm flex items-center gap-1 hover:bg-purple-200 dark:hover:bg-purple-900/50 transition-colors">
+                        <i data-lucide="wand-2" class="w-4 h-4"></i>
+                        Re-categorizar com IA
+                    </button>
+                    
+                    <button onclick="openRulesManager()" class="px-3 py-1.5 bg-slate-100 dark:bg-slate-600 text-slate-700 dark:text-slate-300 rounded-lg text-sm flex items-center gap-1 hover:bg-slate-200 dark:hover:bg-slate-500 transition-colors">
+                        <i data-lucide="list-checks" class="w-4 h-4"></i>
+                        Gerenciar Regras
+                    </button>
+                </div>
+                
+                <!-- Lista de Transações -->
+                <div class="flex-1 overflow-y-auto p-2 md:p-4">
+                    <div class="space-y-2">
+                        ${txs.map((tx, index) => renderApprovalItem(tx, index)).join('')}
+                    </div>
+                    
+                    ${txs.length === 0 ? `
+                        <div class="text-center py-12">
+                            <i data-lucide="inbox" class="w-16 h-16 mx-auto text-slate-300 dark:text-slate-600 mb-4"></i>
+                            <p class="text-slate-500 dark:text-slate-400">Nenhuma transação para aprovar</p>
+                        </div>
+                    ` : ''}
+                </div>
+                
+                <!-- Footer -->
+                <div class="p-4 md:p-6 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 flex flex-col md:flex-row items-center justify-between gap-4">
+                    <div class="text-sm text-slate-500 dark:text-slate-400">
+                        <span class="font-bold text-slate-700 dark:text-slate-300">${selectedCount}</span> transação(ões) selecionada(s) para importar
+                    </div>
+                    <div class="flex gap-3">
+                        <button onclick="closeApprovalPanel()" class="px-4 py-2 text-slate-600 hover:text-slate-800 transition-colors">
+                            Cancelar
+                        </button>
+                        <button onclick="confirmApproval()" ${selectedCount === 0 ? 'disabled' : ''}
+                                class="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2">
+                            <i data-lucide="check" class="w-5 h-5"></i>
+                            Confirmar Importação (${selectedCount})
+                        </button>
+                    </div>
+                </div>
+                
+            </div>
+        </div>
+    `;
+    
+    // Remove modal existente se houver
+    const existing = document.getElementById('approval-panel');
+    if (existing) existing.remove();
+    
+    // Adiciona novo modal
+    const modal = document.createElement('div');
+    modal.innerHTML = modalHtml;
+    document.body.appendChild(modal.firstElementChild);
+    lucide.createIcons();
+}
+
+// Renderiza item de transação no painel de aprovação
+function renderApprovalItem(tx, index) {
+    const isSelected = tx.selected !== false;
+    const blurClass = getBlurClass();
+    const categories = APPROVAL_STATE.categories || [];
+    const accounts = APPROVAL_STATE.accounts || [];
+    
+    // Determina confiança e método
+    const confidencePercent = tx.confidence ? Math.round(tx.confidence * 100) : 0;
+    const methodLabel = tx.method === 'rule' ? 'Regra' : tx.method === 'ai' ? 'IA' : 'Manual';
+    const methodColor = tx.method === 'rule' ? 'green' : tx.method === 'ai' ? 'purple' : 'slate';
+    
+    return `
+        <div class="flex items-start gap-3 p-3 md:p-4 bg-white dark:bg-slate-800 rounded-xl border ${isSelected ? 'border-blue-300 dark:border-blue-700' : 'border-slate-200 dark:border-slate-700 opacity-60'} transition-all hover:shadow-md"
+             data-index="${index}">
+            
+            <!-- Checkbox -->
+            <div class="pt-1">
+                <input type="checkbox" ${isSelected ? 'checked' : ''} 
+                       onchange="toggleApprovalItem(${index}, this.checked)"
+                       class="w-5 h-5 rounded border-slate-300 text-blue-600">
+            </div>
+            
+            <!-- Info Principal -->
+            <div class="flex-1 min-w-0">
+                <div class="flex items-start justify-between gap-2 mb-2">
+                    <div class="flex-1 min-w-0">
+                        <p class="font-medium text-slate-800 dark:text-white truncate" title="${tx.description}">
+                            ${tx.description}
+                        </p>
+                        <div class="flex items-center gap-2 mt-1 text-xs text-slate-500 dark:text-slate-400">
+                            <span>${formatDateBR(tx.date)}</span>
+                            <span>•</span>
+                            <span class="px-1.5 py-0.5 rounded ${methodColor === 'green' ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300' : methodColor === 'purple' ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400'}">
+                                ${methodLabel} ${confidencePercent > 0 ? `(${confidencePercent}%)` : ''}
+                            </span>
+                        </div>
+                    </div>
+                    <div class="text-right shrink-0">
+                        <p class="text-lg font-bold ${tx.transactionType === 'Entrada' ? 'text-green-600' : 'text-red-600'} ${blurClass}">
+                            ${tx.transactionType === 'Entrada' ? '+' : '-'}${formatCurrency(tx.value)}
+                        </p>
+                        <span class="text-xs px-2 py-0.5 rounded-full ${tx.transactionType === 'Entrada' ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300' : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300'}">
+                            ${tx.transactionType}
+                        </span>
+                    </div>
+                </div>
+                
+                <!-- Campos Editáveis -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-2 mt-3">
+                    <!-- Categoria/Conta -->
+                    <div>
+                        <label class="text-xs text-slate-500 dark:text-slate-400 block mb-1">Conta/Projeto</label>
+                        <select onchange="updateApprovalField(${index}, 'category', this.value)"
+                                class="w-full p-2 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-800 dark:text-white">
+                            <option value="">Selecione...</option>
+                            ${accounts.map(acc => `<option value="${acc.name}" ${tx.category === acc.name ? 'selected' : ''}>${acc.name}</option>`).join('')}
+                            <option value="A Classificar" ${tx.category === 'A Classificar' ? 'selected' : ''}>A Classificar</option>
+                        </select>
+                    </div>
+                    
+                    <!-- Subcategoria -->
+                    <div>
+                        <label class="text-xs text-slate-500 dark:text-slate-400 block mb-1">Subcategoria</label>
+                        <input type="text" value="${tx.subcategory || ''}" 
+                               onchange="updateApprovalField(${index}, 'subcategory', this.value)"
+                               placeholder="Ex: Serviços, Produtos..."
+                               class="w-full p-2 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-800 dark:text-white">
+                    </div>
+                    
+                    <!-- Centro de Custo -->
+                    <div>
+                        <label class="text-xs text-slate-500 dark:text-slate-400 block mb-1">Centro de Custo</label>
+                        <input type="text" value="${tx.costCenter || ''}" 
+                               onchange="updateApprovalField(${index}, 'costCenter', this.value)"
+                               placeholder="Opcional"
+                               class="w-full p-2 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-800 dark:text-white">
+                    </div>
+                </div>
+                
+                <!-- Ações -->
+                <div class="flex items-center gap-2 mt-3">
+                    <button onclick="createRuleFromTransaction(${index})" 
+                            class="text-xs px-2 py-1 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors flex items-center gap-1">
+                        <i data-lucide="plus-circle" class="w-3 h-3"></i>
+                        Criar Regra
+                    </button>
+                    <button onclick="recategorizeSingle(${index})" 
+                            class="text-xs px-2 py-1 bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 rounded hover:bg-purple-100 dark:hover:bg-purple-900/40 transition-colors flex items-center gap-1">
+                        <i data-lucide="wand-2" class="w-3 h-3"></i>
+                        Re-categorizar
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+// Toggle seleção de item
+function toggleApprovalItem(index, checked) {
+    APPROVAL_STATE.transactions[index].selected = checked;
+    APPROVAL_STATE.selectedCount = APPROVAL_STATE.transactions.filter(t => t.selected !== false).length;
+    renderApprovalPanel();
+}
+
+// Toggle selecionar todos
+function toggleSelectAllApproval(checked) {
+    APPROVAL_STATE.transactions.forEach(tx => tx.selected = checked);
+    APPROVAL_STATE.selectedCount = checked ? APPROVAL_STATE.transactions.length : 0;
+    renderApprovalPanel();
+}
+
+// Atualiza campo de transação
+function updateApprovalField(index, field, value) {
+    APPROVAL_STATE.transactions[index][field] = value;
+    APPROVAL_STATE.transactions[index].method = 'manual'; // Marca como editado manualmente
+}
+
+// Cria regra a partir de transação
+function createRuleFromTransaction(index) {
+    const tx = APPROVAL_STATE.transactions[index];
+    
+    // Extrai palavras-chave da descrição
+    const words = tx.description.toLowerCase()
+        .replace(/[0-9]/g, '')
+        .replace(/[^a-záàâãéèêíìîóòôõúùûç\s]/gi, '')
+        .split(/\s+/)
+        .filter(w => w.length > 3);
+    
+    const suggestedPattern = words.slice(0, 3).join(' ');
+    
+    const modalHtml = `
+        <div id="rule-modal" class="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4" onclick="closeRuleModal(event)">
+            <div class="bg-white dark:bg-slate-800 rounded-xl max-w-md w-full p-6" onclick="event.stopPropagation()">
+                <h3 class="text-lg font-bold text-slate-800 dark:text-white mb-4 flex items-center gap-2">
+                    <i data-lucide="plus-circle" class="w-5 h-5 text-blue-500"></i>
+                    Criar Regra de Categorização
+                </h3>
+                
+                <div class="space-y-4">
+                    <div>
+                        <label class="text-sm font-medium text-slate-700 dark:text-slate-300 block mb-1">Padrão (palavras-chave)</label>
+                        <input type="text" id="rule-pattern" value="${suggestedPattern}"
+                               class="w-full p-3 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-800 dark:text-white"
+                               placeholder="Ex: pix recebido cliente">
+                        <p class="text-xs text-slate-400 mt-1">Transações que contenham essas palavras serão categorizadas automaticamente</p>
+                    </div>
+                    
+                    <div>
+                        <label class="text-sm font-medium text-slate-700 dark:text-slate-300 block mb-1">Categoria/Conta</label>
+                        <select id="rule-category" class="w-full p-3 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-800 dark:text-white">
+                            ${APPROVAL_STATE.accounts.map(acc => `<option value="${acc.name}" ${tx.category === acc.name ? 'selected' : ''}>${acc.name}</option>`).join('')}
+                        </select>
+                    </div>
+                    
+                    <div>
+                        <label class="text-sm font-medium text-slate-700 dark:text-slate-300 block mb-1">Subcategoria (opcional)</label>
+                        <input type="text" id="rule-subcategory" value="${tx.subcategory || ''}"
+                               class="w-full p-3 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-800 dark:text-white"
+                               placeholder="Ex: Serviços, Produtos">
+                    </div>
+                    
+                    <div>
+                        <label class="text-sm font-medium text-slate-700 dark:text-slate-300 block mb-1">Tipo</label>
+                        <select id="rule-type" class="w-full p-3 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-800 dark:text-white">
+                            <option value="auto">Detectar automaticamente</option>
+                            <option value="Entrada" ${tx.transactionType === 'Entrada' ? 'selected' : ''}>Sempre Entrada</option>
+                            <option value="Saída" ${tx.transactionType === 'Saída' ? 'selected' : ''}>Sempre Saída</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="flex justify-end gap-3 mt-6">
+                    <button onclick="closeRuleModal()" class="px-4 py-2 text-slate-600 hover:text-slate-800">
+                        Cancelar
+                    </button>
+                    <button onclick="saveCategorizationRule(${index})" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2">
+                        <i data-lucide="save" class="w-4 h-4"></i>
+                        Salvar Regra
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    const modal = document.createElement('div');
+    modal.innerHTML = modalHtml;
+    document.body.appendChild(modal.firstElementChild);
+    lucide.createIcons();
+}
+
+// Fecha modal de regra
+function closeRuleModal(event) {
+    if (event && event.target !== event.currentTarget) return;
+    const modal = document.getElementById('rule-modal');
+    if (modal) modal.remove();
+}
+
+// Salva regra de categorização
+function saveCategorizationRule(transactionIndex) {
+    const pattern = document.getElementById('rule-pattern').value.trim();
+    const category = document.getElementById('rule-category').value;
+    const subcategory = document.getElementById('rule-subcategory').value.trim();
+    const type = document.getElementById('rule-type').value;
+    
+    if (!pattern || pattern.length < 3) {
+        showToast('O padrão deve ter pelo menos 3 caracteres', 'error');
+        return;
+    }
+    
+    if (!category) {
+        showToast('Selecione uma categoria', 'error');
+        return;
+    }
+    
+    showToast('Salvando regra...', 'info');
+    
+    google.script.run
+        .withSuccessHandler(function(result) {
+            if (result.success) {
+                showToast('✅ Regra criada! Será aplicada em futuras importações.', 'success');
+                closeRuleModal();
+                
+                // Atualiza a transação atual
+                if (transactionIndex !== undefined) {
+                    APPROVAL_STATE.transactions[transactionIndex].category = category;
+                    APPROVAL_STATE.transactions[transactionIndex].subcategory = subcategory;
+                    APPROVAL_STATE.transactions[transactionIndex].method = 'rule';
+                    APPROVAL_STATE.transactions[transactionIndex].confidence = 0.95;
+                }
+                
+                // Adiciona regra ao estado local
+                APPROVAL_STATE.rules.push({ pattern: pattern.toLowerCase(), category, subcategory, type });
+                
+                // Re-aplica regras às transações pendentes
+                applyRulesToPending();
+                
+                renderApprovalPanel();
+            } else {
+                showToast('Erro ao salvar regra: ' + (result.error || 'Erro desconhecido'), 'error');
+            }
+        })
+        .withFailureHandler(function(error) {
+            showToast('Erro ao salvar regra: ' + error.message, 'error');
+        })
+        .addCategorizationRule(pattern, category, subcategory, type);
+}
+
+// Aplica regras às transações pendentes
+function applyRulesToPending() {
+    APPROVAL_STATE.transactions.forEach((tx, index) => {
+        if (tx.method === 'pending' || tx.category === 'A Classificar') {
+            const descLower = tx.description.toLowerCase();
+            
+            for (const rule of APPROVAL_STATE.rules) {
+                if (descLower.indexOf(rule.pattern) > -1) {
+                    tx.category = rule.category;
+                    tx.subcategory = rule.subcategory || tx.subcategory;
+                    tx.method = 'rule';
+                    tx.confidence = 0.95;
+                    break;
+                }
+            }
+        }
+    });
+}
+
+// Re-categoriza item único com IA
+function recategorizeSingle(index) {
+    const tx = APPROVAL_STATE.transactions[index];
+    showToast('Consultando IA...', 'info');
+    
+    google.script.run
+        .withSuccessHandler(function(result) {
+            if (result && result.category) {
+                APPROVAL_STATE.transactions[index].category = result.category;
+                APPROVAL_STATE.transactions[index].subcategory = result.subcategory || '';
+                APPROVAL_STATE.transactions[index].method = 'ai';
+                APPROVAL_STATE.transactions[index].confidence = result.confidence || 0.8;
+                renderApprovalPanel();
+                showToast('Categorizado como: ' + result.category, 'success');
+            } else {
+                showToast('IA não conseguiu categorizar', 'error');
+            }
+        })
+        .withFailureHandler(function(error) {
+            showToast('Erro: ' + error.message, 'error');
+        })
+        .categorizeSingleTransaction(tx.description, tx.value, tx.transactionType);
+}
+
+// Re-categoriza todas selecionadas
+function recategorizeSelected() {
+    const selected = APPROVAL_STATE.transactions.filter((t, i) => t.selected !== false && (t.method === 'pending' || t.category === 'A Classificar'));
+    
+    if (selected.length === 0) {
+        showToast('Nenhuma transação pendente selecionada', 'info');
+        return;
+    }
+    
+    if (selected.length > 20) {
+        showToast('Máximo 20 transações por vez para re-categorização com IA', 'warning');
+        return;
+    }
+    
+    showToast(`Re-categorizando ${selected.length} transação(ões)...`, 'info', 5000);
+    
+    google.script.run
+        .withSuccessHandler(function(results) {
+            results.forEach(result => {
+                const index = APPROVAL_STATE.transactions.findIndex(t => t.description === result.description);
+                if (index >= 0 && result.category) {
+                    APPROVAL_STATE.transactions[index].category = result.category;
+                    APPROVAL_STATE.transactions[index].subcategory = result.subcategory || '';
+                    APPROVAL_STATE.transactions[index].method = 'ai';
+                    APPROVAL_STATE.transactions[index].confidence = result.confidence || 0.8;
+                }
+            });
+            renderApprovalPanel();
+            showToast('Re-categorização concluída!', 'success');
+        })
+        .withFailureHandler(function(error) {
+            showToast('Erro na re-categorização: ' + error.message, 'error');
+        })
+        .categorizeBatchTransactions(selected);
+}
+
+// Confirma aprovação e salva transações
+function confirmApproval() {
+    const selected = APPROVAL_STATE.transactions.filter(t => t.selected !== false);
+    
+    if (selected.length === 0) {
+        showToast('Nenhuma transação selecionada', 'error');
+        return;
+    }
+    
+    // Verifica se todas têm categoria
+    const withoutCategory = selected.filter(t => !t.category || t.category === 'A Classificar');
+    if (withoutCategory.length > 0) {
+        if (!confirm(`${withoutCategory.length} transação(ões) estão sem categoria. Deseja continuar mesmo assim?`)) {
+            return;
+        }
+    }
+    
+    showLoadingOverlay('Salvando transações...');
+    
+    // Prepara dados para salvar
+    const transactionsToSave = selected.map(tx => ({
+        date: tx.date,
+        description: tx.description,
+        value: tx.value,
+        transactionType: tx.transactionType,
+        category: tx.category || 'A Classificar',
+        subcategory: tx.subcategory || '',
+        costCenter: tx.costCenter || '',
+        status: 'Pago', // Transações de extrato já foram realizadas
+        bankId: APPROVAL_STATE.bankId
+    }));
+    
+    google.script.run
+        .withSuccessHandler(function(result) {
+            hideLoadingOverlay();
+            
+            if (result.success) {
+                showToast(`✅ ${result.saved} transações importadas com sucesso!`, 'success', 5000);
+                closeApprovalPanel();
+                refreshDashboard();
+            } else {
+                showToast('Erro ao salvar: ' + (result.error || 'Erro desconhecido'), 'error');
+            }
+        })
+        .withFailureHandler(function(error) {
+            hideLoadingOverlay();
+            showToast('Erro ao salvar: ' + error.message, 'error');
+        })
+        .saveApprovedTransactions(transactionsToSave, APPROVAL_STATE.bankId);
+}
+
+// Fecha painel de aprovação
+function closeApprovalPanel(event) {
+    if (event && event.target !== event.currentTarget) return;
+    
+    const panel = document.getElementById('approval-panel');
+    if (panel) {
+        panel.style.opacity = '0';
+        setTimeout(() => panel.remove(), 200);
+    }
+    
+    // Limpa estado
+    APPROVAL_STATE = {
+        transactions: [],
+        bankId: null,
+        bankName: '',
+        rules: [],
+        categories: [],
+        subcategories: {},
+        selectedCount: 0,
+        editingIndex: null
+    };
+}
+
+// Loading overlay
+function showLoadingOverlay(message) {
+    const overlay = document.createElement('div');
+    overlay.id = 'loading-overlay';
+    overlay.className = 'fixed inset-0 bg-black/50 z-[100] flex items-center justify-center';
+    overlay.innerHTML = `
+        <div class="bg-white dark:bg-slate-800 rounded-xl p-8 text-center">
+            <div class="w-12 h-12 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mx-auto mb-4"></div>
+            <p class="text-slate-700 dark:text-slate-300 font-medium">${message || 'Processando...'}</p>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+}
+
+function hideLoadingOverlay() {
+    const overlay = document.getElementById('loading-overlay');
+    if (overlay) overlay.remove();
+}
+
+// Gerenciador de Regras
+function openRulesManager() {
+    const rules = APPROVAL_STATE.rules;
+    
+    const modalHtml = `
+        <div id="rules-manager" class="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4" onclick="closeRulesManager(event)">
+            <div class="bg-white dark:bg-slate-800 rounded-xl max-w-2xl w-full max-h-[80vh] overflow-hidden flex flex-col" onclick="event.stopPropagation()">
+                <div class="p-6 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                    <h3 class="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                        <i data-lucide="list-checks" class="w-5 h-5 text-purple-500"></i>
+                        Regras de Categorização
+                    </h3>
+                    <button onclick="closeRulesManager()" class="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg">
+                        <i data-lucide="x" class="w-5 h-5"></i>
+                    </button>
+                </div>
+                
+                <div class="flex-1 overflow-y-auto p-6">
+                    ${rules.length > 0 ? `
+                        <div class="space-y-3">
+                            ${rules.map((rule, index) => `
+                                <div class="p-4 bg-slate-50 dark:bg-slate-700 rounded-lg flex items-center justify-between">
+                                    <div>
+                                        <p class="font-mono text-sm text-slate-800 dark:text-white">"${rule.pattern}"</p>
+                                        <p class="text-xs text-slate-500 mt-1">
+                                            → ${rule.category} ${rule.subcategory ? `(${rule.subcategory})` : ''} 
+                                            <span class="text-slate-400">[${rule.type || 'auto'}]</span>
+                                        </p>
+                                    </div>
+                                    <button onclick="deleteRule(${index})" class="p-2 text-red-500 hover:bg-red-100 dark:hover:bg-red-900/30 rounded-lg">
+                                        <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                    </button>
+                                </div>
+                            `).join('')}
+                        </div>
+                    ` : `
+                        <div class="text-center py-12">
+                            <i data-lucide="inbox" class="w-12 h-12 mx-auto text-slate-300 dark:text-slate-600 mb-4"></i>
+                            <p class="text-slate-500 dark:text-slate-400">Nenhuma regra criada ainda</p>
+                            <p class="text-xs text-slate-400 mt-2">Clique em "Criar Regra" em uma transação para começar</p>
+                        </div>
+                    `}
+                </div>
+                
+                <div class="p-4 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50">
+                    <p class="text-xs text-slate-500 dark:text-slate-400">
+                        💡 <strong>Dica:</strong> Quanto mais regras você criar, mais precisas serão as futuras categorizações automáticas.
+                    </p>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    const modal = document.createElement('div');
+    modal.innerHTML = modalHtml;
+    document.body.appendChild(modal.firstElementChild);
+    lucide.createIcons();
+}
+
+function closeRulesManager(event) {
+    if (event && event.target !== event.currentTarget) return;
+    const modal = document.getElementById('rules-manager');
+    if (modal) modal.remove();
+}
+
+function deleteRule(index) {
+    if (!confirm('Excluir esta regra?')) return;
+    
+    const rule = APPROVAL_STATE.rules[index];
+    
+    google.script.run
+        .withSuccessHandler(function(result) {
+            if (result.success) {
+                APPROVAL_STATE.rules.splice(index, 1);
+                closeRulesManager();
+                openRulesManager();
+                showToast('Regra excluída', 'success');
+            }
+        })
+        .withFailureHandler(function(error) {
+            showToast('Erro ao excluir: ' + error.message, 'error');
+        })
+        .deleteCategorizationRule(rule.pattern);
+}
+</script>
