@@ -350,19 +350,42 @@ function saveApprovedTransactions(transactions, bankId) {
     return { success: false, error: 'Aba TRANSACOES não encontrada' };
   }
   
+  // Busca mapa de contas (nome -> id) para vincular corretamente
+  var accountsMap = {};
+  var accountsSheet = ss.getSheetByName('CONTAS');
+  if (accountsSheet && accountsSheet.getLastRow() > 1) {
+    var accountsData = accountsSheet.getRange(2, 1, accountsSheet.getLastRow() - 1, 2).getValues();
+    accountsData.forEach(function(row) {
+      var id = String(row[0]).trim();
+      var name = String(row[1]).trim().toLowerCase();
+      if (id && name) {
+        accountsMap[name] = id;
+      }
+    });
+  }
+  
   var saved = 0;
   var errors = [];
   
   // Estrutura: Data, Tipo, Categoria, Subcategoria, Valor, Conta, Banco, Status, Descrição, Centro_Custo
   transactions.forEach(function(tx, index) {
     try {
+      // Resolve o accountId: usa o ID direto se fornecido, senão busca pelo nome da categoria/conta
+      var accountId = tx.accountId || '';
+      
+      // Se não tem accountId mas tem category (que é o nome da conta), busca o ID
+      if (!accountId && tx.category && tx.category !== 'A Classificar') {
+        var categoryLower = String(tx.category).trim().toLowerCase();
+        accountId = accountsMap[categoryLower] || '';
+      }
+      
       sheet.appendRow([
         tx.date,
         tx.transactionType,
         tx.category || 'A Classificar',
         tx.subcategory || '',
         tx.value,
-        '',  // Conta (ID) - será preenchido se necessário
+        accountId,  // Conta (ID) - agora vincula corretamente
         bankId,
         tx.status || 'Pago',
         tx.description,
