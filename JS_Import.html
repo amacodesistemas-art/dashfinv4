@@ -352,12 +352,15 @@ function handleImportResult(result) {
     document.getElementById('import-categorized').textContent = result.categorization.byRule + result.categorization.byAI;
     document.getElementById('import-pending').textContent = result.categorization.pending;
     
-    // Fecha modal de importação
-    closeImportModal();
+    // IMPORTANTE: Salva bankId ANTES de fechar o modal (que limpa IMPORT_STATE)
+    const savedBankId = IMPORT_STATE.bankId;
     
-    // Busca nome do banco selecionado
+    // Busca nome do banco selecionado ANTES de fechar
     const bankSelect = document.getElementById('import-bank');
     const bankName = bankSelect?.options[bankSelect.selectedIndex]?.text || '';
+    
+    // Fecha modal de importação
+    closeImportModal();
     
     // Abre painel de aprovação com as transações categorizadas
     // NOVO FLUXO: Tudo acontece dentro do dashboard!
@@ -366,7 +369,7 @@ function handleImportResult(result) {
     setTimeout(() => {
         openApprovalPanel({
             transactions: result.categorizedTransactions || [],
-            bankId: IMPORT_STATE.bankId,
+            bankId: savedBankId,  // Usa o bankId salvo antes de fechar o modal
             bankName: bankName.replace(/[🏦💳💵]/g, '').trim(),
             stats: result.categorization
         });
